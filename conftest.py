@@ -60,6 +60,18 @@ def unavailable_product(category):
 
 
 @pytest.fixture
+def featured_product(category):
+    return Product.objects.create(
+        name="Seraphine Mini",
+        slug="seraphine-mini",
+        tagline="All of Seraphine. Less of the counter.",
+        price=Decimal("129.99"),
+        is_featured=True,
+        category=category,
+    )
+
+
+@pytest.fixture
 def tag(db):
     return Tag.objects.create(name="bestseller", slug="bestseller")
 
