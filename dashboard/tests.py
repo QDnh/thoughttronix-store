@@ -28,6 +28,7 @@ def make_order(user, total, *, days_ago=0, status=Order.Status.PLACED):
     return Order.objects.create(
         user=user,
         status=status,
+        subtotal=Decimal(total),
         total=Decimal(total),
         email="casey@example.com",
         shipping_name="Casey Monroe",
@@ -186,6 +187,15 @@ def test_top_products_merge_lines_across_orders(customer):
     assert len(top) == 1
     assert top[0]["units"] == 3
     assert top[0]["revenue"] == Decimal("267.00")
+
+
+def test_top_products_count_what_was_charged_after_discounts(customer):
+    order = make_order(customer, "0.00")
+    line = add_item(order, "Seraphine Home Hub", "349.99", quantity=2)
+    line.discount_amount = Decimal("349.99")  # SERAPHINE50
+    line.save()
+
+    assert queries.top_products()[0]["revenue"] == Decimal("349.99")
 
 
 def test_top_products_respect_limit_cancellation_and_period(customer):

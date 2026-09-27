@@ -1,0 +1,14 @@
+{% load humanize %}
+{# An order's money, from its snapshot: subtotal and discount only when a code was used. #}
+{% if order.discount_code_text %}
+  <p class="flex w-full justify-between gap-6 text-sm">
+    <span class="opacity-70">Subtotal</span>
+    <span>${{ order.subtotal|intcomma }}</span>
+  </p>
+  <p class="flex w-full justify-between gap-6 text-sm text-success">
+    <span>{{ order.discount_code_text }} ({{ order.discount_percent }}% off)</span>
+    <span>−${{ order.discount_amount|intcomma }}</span>
+  </p>
+{% endif %}
+<p class="mt-1 text-sm uppercase tracking-wide opacity-60">Order total</p>
+<p class="text-3xl font-bold text-primary">${{ order.total|intcomma }}</p>

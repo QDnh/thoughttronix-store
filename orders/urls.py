@@ -24,6 +24,11 @@ urlpatterns = [
     ),
     path("checkout/", views.CheckoutView.as_view(), name="checkout"),
     path(
+        "checkout/discount/",
+        views.ApplyDiscountView.as_view(),
+        name="apply_discount",
+    ),
+    path(
         "checkout/address-fields/<str:section>/",
         views.CheckoutAddressFieldsView.as_view(),
         name="address_fields",
@@ -50,5 +55,30 @@ urlpatterns = [
         "backoffice/orders/<int:pk>/status/",
         views.UpdateOrderStatusView.as_view(),
         name="manage_order_status",
+    ),
+    path(
+        "backoffice/discounts/",
+        views.ManageDiscountListView.as_view(),
+        name="manage_discounts",
+    ),
+    path(
+        "backoffice/discounts/add/",
+        views.ManageDiscountCreateView.as_view(),
+        name="manage_discount_create",
+    ),
+    path(
+        "backoffice/discounts/<int:pk>/edit/",
+        views.ManageDiscountUpdateView.as_view(),
+        name="manage_discount_update",
+    ),
+    path(
+        "backoffice/discounts/<int:pk>/end/",
+        views.EndDiscountView.as_view(),
+        name="manage_discount_end",
+    ),
+    path(
+        "backoffice/discounts/<int:pk>/delete/",
+        views.ManageDiscountDeleteView.as_view(),
+        name="manage_discount_delete",
     ),
 ]

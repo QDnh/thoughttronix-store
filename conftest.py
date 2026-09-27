@@ -4,13 +4,15 @@ Shared test data lives here as plain fixtures — no factories. The suite
 grows with the project; tests never invoke the seed command.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from accounts.models import Address
-from orders.models import Cart, CartItem
+from orders.models import Cart, CartItem, DiscountCode
 from products.models import Category, Product, Tag
 
 
@@ -129,3 +131,52 @@ def cart(customer):
 @pytest.fixture
 def cart_item(cart, product):
     return CartItem.objects.create(cart=cart, product=product, quantity=2)
+
+
+@pytest.fixture
+def order_code(db):
+    """15% off the entire order, running now."""
+    now = timezone.now()
+    return DiscountCode.objects.create(
+        code="THOUGHTS15",
+        percent_off=15,
+        starts_at=now - timedelta(days=1),
+        expires_at=now + timedelta(days=30),
+    )
+
+
+@pytest.fixture
+def seraphine_code(product):
+    """50% off the Seraphine Home Hub only, running now."""
+    now = timezone.now()
+    code = DiscountCode.objects.create(
+        code="SERAPHINE50",
+        percent_off=50,
+        applies_to=DiscountCode.AppliesTo.PRODUCTS,
+        starts_at=now - timedelta(days=1),
+        expires_at=now + timedelta(days=30),
+    )
+    code.products.add(product)
+    return code
+
+
+@pytest.fixture
+def expired_code(db):
+    now = timezone.now()
+    return DiscountCode.objects.create(
+        code="SPRING20",
+        percent_off=20,
+        starts_at=now - timedelta(days=100),
+        expires_at=now - timedelta(days=10),
+    )
+
+
+@pytest.fixture
+def scheduled_code(db):
+    now = timezone.now()
+    return DiscountCode.objects.create(
+        code="HOLIDAY25",
+        percent_off=25,
+        starts_at=now + timedelta(days=10),
+        expires_at=now + timedelta(days=40),
+    )

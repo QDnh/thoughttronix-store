@@ -1,0 +1,9 @@
+{% load humanize %}
+{# One order line's total cell: struck through with the discounted price when a code applied. #}
+{% if item.discount_amount %}
+  <span class="text-sm line-through opacity-60">${{ item.line_total|intcomma }}</span>
+  <span class="block font-semibold">${{ item.charged|intcomma }}</span>
+  <span class="block text-xs text-success">−${{ item.discount_amount|intcomma }} {{ order.discount_code_text }}</span>
+{% else %}
+  <span class="font-semibold">${{ item.line_total|intcomma }}</span>
+{% endif %}

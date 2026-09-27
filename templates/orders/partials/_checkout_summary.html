@@ -1,0 +1,71 @@
+{% load humanize %}
+{# The checkout's order summary with the discount box. Rendered inline on #}
+{# the checkout page, and alone by the Apply endpoint, which swaps it whole #}
+{# and updates the Place order button's total out-of-band. #}
+<div id="checkout-summary" class="card bg-base-100 shadow-md">
+  <div class="card-body">
+    <h2 class="card-title">Your order</h2>
+    <ul class="space-y-2">
+      {% for line in quote.lines %}
+        <li class="text-sm">
+          <div class="flex justify-between gap-4">
+            <span>{{ line.item.quantity }} × {{ line.item.product.name }}</span>
+            <span class="whitespace-nowrap">${{ line.item.line_total|intcomma }}</span>
+          </div>
+          {% if line.discount %}
+            <div class="flex justify-between gap-4 text-success">
+              <span class="pl-4">{{ quote.code.code }}</span>
+              <span class="whitespace-nowrap">−${{ line.discount|intcomma }}</span>
+            </div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <div class="divider my-2"></div>
+
+    {% with field=discount_form.discount_code %}
+      <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+      <div class="join w-full">
+        {{ field }}
+        <button type="button" class="btn join-item"
+                hx-post="{% url 'orders:apply_discount' %}"
+                hx-include="#{{ field.id_for_label }}"
+                hx-target="#checkout-summary"
+                hx-swap="outerHTML">Apply</button>
+      </div>
+      {% for error in field.errors %}
+        <p class="mt-1 text-sm text-error" role="alert">{{ error }}</p>
+      {% endfor %}
+      {% if quote.code %}
+        <p class="mt-1 text-sm text-success">
+          {{ quote.code.code }} applied — {{ quote.code.percent_off }}% off
+          {% if quote.code.applies_to == "PRODUCTS" %}eligible items{% else %}your order{% endif %}.
+        </p>
+      {% endif %}
+    {% endwith %}
+
+    <div class="divider my-2"></div>
+
+    {% if quote.discount %}
+      <p class="flex justify-between text-sm">
+        <span>Subtotal</span>
+        <span>${{ quote.subtotal|intcomma }}</span>
+      </p>
+      <p class="flex justify-between text-sm text-success">
+        <span>Discount ({{ quote.code.code }})</span>
+        <span>−${{ quote.discount|intcomma }}</span>
+      </p>
+    {% endif %}
+    <p class="flex justify-between font-semibold">
+      <span>Total</span>
+      <span class="text-primary">${{ quote.total|intcomma }}</span>
+    </p>
+    <a href="{% url 'orders:cart' %}" class="link link-hover text-sm opacity-70">
+      Edit cart
+    </a>
+  </div>
+</div>
+{% if oob_total %}
+  <span id="place-order-total" hx-swap-oob="true">${{ quote.total|intcomma }}</span>
+{% endif %}

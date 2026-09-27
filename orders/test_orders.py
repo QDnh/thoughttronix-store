@@ -29,6 +29,7 @@ def test_order_number_format(order):
 def test_orders_come_most_recent_first(customer, order):
     older = Order.objects.create(
         user=customer,
+        subtotal=Decimal("9.00"),
         total=Decimal("9.00"),
         email="casey@example.com",
         shipping_name="Casey Monroe",

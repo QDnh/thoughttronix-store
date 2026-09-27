@@ -1,0 +1,114 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Discounts — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h2 class="text-xl font-semibold">
+      {{ codes|length }} code{{ codes|length|pluralize }}
+    </h2>
+    <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <span class="opacity-60">Status:</span>
+        <a href="{% querystring status=None %}"
+           class="badge {% if not active_status %}badge-primary{% else %}badge-ghost{% endif %}">
+          all
+        </a>
+        {% for value, label in statuses %}
+          <a href="{% querystring status=value %}"
+             class="badge {% if active_status == value %}badge-primary{% else %}badge-ghost{% endif %}">
+            {{ label }}
+          </a>
+        {% endfor %}
+      </div>
+      <a href="{% url 'orders:manage_discount_create' %}" class="btn btn-primary btn-sm">
+        + Add code
+      </a>
+    </div>
+  </div>
+
+  {% if codes %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Discount</th>
+            <th>Runs</th>
+            <th>Status</th>
+            <th>Orders</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for code in codes %}
+            {% with status=code.status %}
+              <tr>
+                <td>
+                  <a href="{% url 'orders:manage_discount_update' code.pk %}"
+                     class="link-hover font-mono font-semibold">{{ code.code }}</a>
+                </td>
+                <td>
+                  {{ code.percent_off }}% off
+                  <p class="text-xs opacity-60">
+                    {% if code.applies_to == "PRODUCTS" %}
+                      {{ code.products.all|join:", " }}
+                    {% else %}
+                      Entire order
+                    {% endif %}
+                  </p>
+                </td>
+                <td class="whitespace-nowrap text-sm">
+                  {{ code.starts_display }} – {{ code.expires_display }}
+                </td>
+                <td>
+                  {% if status == "active" %}
+                    <span class="badge badge-success badge-outline">Active</span>
+                  {% elif status == "scheduled" %}
+                    <span class="badge badge-info badge-outline">Scheduled</span>
+                  {% else %}
+                    <span class="badge badge-ghost">Expired</span>
+                  {% endif %}
+                </td>
+                <td>{{ code.order_count }}</td>
+                <td class="whitespace-nowrap text-right">
+                  <a href="{% url 'orders:manage_discount_update' code.pk %}"
+                     class="btn btn-ghost btn-xs">Edit</a>
+                  {% if status != "expired" %}
+                    <form method="post" action="{% url 'orders:manage_discount_end' code.pk %}"
+                          class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-ghost btn-xs text-warning">End now</button>
+                    </form>
+                  {% endif %}
+                  {% if not code.order_count %}
+                    <a href="{% url 'orders:manage_discount_delete' code.pk %}"
+                       class="btn btn-ghost btn-xs text-error">Delete</a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="py-16 text-center">
+      {% if active_status %}
+        <p class="text-5xl">🗂️</p>
+        <p class="mt-4 text-xl font-semibold">No codes with that status</p>
+        <p class="mt-2 opacity-70">Every promotion is in some other season.</p>
+        <a href="{% querystring status=None %}" class="btn btn-primary btn-sm mt-6">
+          Show all codes
+        </a>
+      {% else %}
+        <p class="text-5xl">🎟️</p>
+        <p class="mt-4 text-xl font-semibold">No discount codes yet</p>
+        <p class="mt-2 opacity-70">Full price, all the time. Bold strategy.</p>
+        <a href="{% url 'orders:manage_discount_create' %}" class="btn btn-primary btn-sm mt-6">
+          Create the first code
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

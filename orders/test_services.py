@@ -1,12 +1,14 @@
 """place_order tests — coverage priority 3 in the PRD.
 
-Denormalization, cart emptying, atomicity, unavailable rejection, and
-the card_last4-only rule.
+Denormalization, cart emptying, atomicity, unavailable rejection, the
+card_last4-only rule, and discount codes: the per-line math and the
+snapshot that keeps placed orders immune to later code changes.
 """
 
 from decimal import Decimal
 
 import pytest
+from django.core.exceptions import ValidationError
 
 from products.models import Product
 
@@ -124,7 +126,119 @@ def test_a_failure_midway_leaves_no_partial_order(
     assert CartItem.objects.count() == 2
 
 
-def test_the_coupon_seam_is_accepted_and_ignored(cart, cart_item, checkout_data):
-    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+# --- Discount codes ------------------------------------------------------------
 
-    assert order.total == Decimal("699.98")
+
+@pytest.fixture
+def pillow(category):
+    return Product.objects.create(
+        name="Charging Pillow",
+        slug="charging-pillow",
+        price=Decimal("69.00"),
+        category=category,
+    )
+
+
+def test_no_code_means_subtotal_equals_total(cart, cart_item, checkout_data):
+    order = place_order(cart, cart.user, checkout_data)
+
+    assert order.subtotal == order.total == Decimal("699.98")
+    assert order.discount_amount == Decimal("0.00")
+    assert order.discount_code is None
+    assert order.discount_code_text == ""
+
+
+def test_an_order_wide_code_discounts_every_line(
+    cart, cart_item, pillow, order_code, checkout_data
+):
+    cart.add(pillow)
+
+    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS15")
+
+    # 15% of 699.98 = 104.997 → 105.00; 15% of 69.00 = 10.35.
+    hub, pillow_line = order.items.all()
+    assert hub.discount_amount == Decimal("105.00")
+    assert pillow_line.discount_amount == Decimal("10.35")
+    assert order.subtotal == Decimal("768.98")
+    assert order.discount_amount == Decimal("115.35")
+    assert order.total == Decimal("653.63")
+
+
+def test_a_product_code_discounts_only_its_products(
+    cart, cart_item, pillow, seraphine_code, checkout_data
+):
+    cart.add(pillow)
+
+    order = place_order(cart, cart.user, checkout_data, coupon_code="SERAPHINE50")
+
+    hub, pillow_line = order.items.all()
+    assert hub.discount_amount == Decimal("349.99")
+    assert hub.charged == Decimal("349.99")
+    assert pillow_line.discount_amount == Decimal("0.00")
+    assert order.total == Decimal("418.99")
+
+
+def test_the_order_discount_is_the_sum_of_rounded_lines(
+    cart, category, order_code, checkout_data
+):
+    """Round each line, then add — never round the subtotal."""
+    for slug, price in [("a", "0.10"), ("b", "0.10"), ("c", "0.10")]:
+        cart.add(
+            Product.objects.create(
+                name=slug, slug=slug, price=Decimal(price), category=category
+            )
+        )
+
+    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS15")
+
+    # Each line: 15% of 0.10 = 0.015 → 0.02 (half-up). 3 × 0.02 = 0.06,
+    # where 15% of the 0.30 subtotal would have been 0.045 → 0.05.
+    assert order.discount_amount == Decimal("0.06")
+    assert sum(item.discount_amount for item in order.items.all()) == Decimal("0.06")
+
+
+def test_the_code_is_snapshotted_onto_the_order(
+    cart, cart_item, order_code, checkout_data
+):
+    order = place_order(cart, cart.user, checkout_data, coupon_code=" thoughts15 ")
+
+    assert order.discount_code == order_code
+    assert order.discount_code_text == "THOUGHTS15"
+    assert order.discount_percent == 15
+
+
+def test_ending_editing_or_deleting_a_code_never_changes_placed_orders(
+    cart, cart_item, order_code, checkout_data
+):
+    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS15")
+
+    order_code.end_now()
+    order_code.percent_off = 90
+    order_code.save()
+    order_code.delete()
+
+    order.refresh_from_db()
+    assert order.discount_code is None  # the link goes; the snapshot stays
+    assert order.discount_code_text == "THOUGHTS15"
+    assert order.discount_percent == 15
+    assert order.discount_amount == Decimal("105.00")
+    assert order.total == Decimal("594.98")
+    assert order.items.get().discount_amount == Decimal("105.00")
+
+
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        ("NOPE", "We don't recognize that code."),
+        ("SPRING20", "This code expired on"),
+        ("HOLIDAY25", "This code isn't active until"),
+    ],
+)
+def test_an_unusable_code_places_nothing(
+    cart, cart_item, expired_code, scheduled_code, checkout_data, code, message
+):
+    with pytest.raises(ValidationError, match=message):
+        place_order(cart, cart.user, checkout_data, coupon_code=code)
+
+    assert not Order.objects.exists()
+    assert cart.items.count() == 1  # the cart is untouched

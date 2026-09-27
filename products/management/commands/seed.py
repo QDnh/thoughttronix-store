@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.models import Address
-from orders.models import Cart, Order, OrderItem
+from orders.models import Cart, DiscountCode, Order, OrderItem
 from products.models import Category, Product, Tag
 
 TAGS = [
@@ -504,6 +504,16 @@ CUSTOMER_WORK = ("2600 Neuron Parkway", "Suite 400", "Amarillo", "TX", "79101")
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# Seasonal promotions, one of each status, dated relative to seeding:
+# (code, percent off, product slugs or None for the entire order,
+#  starts in N days, expires in N days). Negative days are in the past.
+DISCOUNT_CODES = [
+    ("SERAPHINE50", 50, ["seraphine"], -3, 11),
+    ("THOUGHTS15", 15, None, -10, 50),
+    ("SPRING20", 20, None, -190, -100),
+    ("HOLIDAY25", 25, None, 30, 60),
+]
+
 
 class Command(BaseCommand):
     help = "Wipe and rebuild the demo world: catalog, tags, and demo accounts."
@@ -517,6 +527,7 @@ class Command(BaseCommand):
         self._create_customer_cart()
         self._create_customer_addresses()
         self._create_orders()
+        self._create_discount_codes()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -526,6 +537,7 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
                 f"{Address.objects.count()} saved addresses, "
+                f"{DiscountCode.objects.count()} discount codes, "
                 f"and a live cart for 'customer'."
             )
         )
@@ -533,6 +545,7 @@ class Command(BaseCommand):
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
         Order.objects.all().delete()
+        DiscountCode.objects.all().delete()
         Cart.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
@@ -669,6 +682,24 @@ class Command(BaseCommand):
                 rng=rng,
             )
 
+    def _create_discount_codes(self):
+        """One code per status, so the Discounts tab and checkout have something to show."""
+        now = timezone.now()
+        for code, percent, slugs, starts_in, expires_in in DISCOUNT_CODES:
+            discount = DiscountCode.objects.create(
+                code=code,
+                percent_off=percent,
+                applies_to=(
+                    DiscountCode.AppliesTo.PRODUCTS
+                    if slugs
+                    else DiscountCode.AppliesTo.ORDER
+                ),
+                starts_at=now + timedelta(days=starts_in),
+                expires_at=now + timedelta(days=expires_in),
+            )
+            if slugs:
+                discount.products.set(Product.objects.filter(slug__in=slugs))
+
     def _build_order(self, *, user, created_at, status, lines, rng, address=None):
         """One order with denormalized addresses and purchase-time prices."""
         # Drawn even when an address is given, so the RNG sequence — and so
@@ -678,13 +709,15 @@ class Command(BaseCommand):
         if address:
             street, line2, city, state, zip_code = address
         name = f"{user.first_name} {user.last_name}"
+        total = sum(
+            (product.price * quantity for product, quantity in lines),
+            Decimal("0.00"),
+        )
         order = Order.objects.create(
             user=user,
             status=status,
-            total=sum(
-                (product.price * quantity for product, quantity in lines),
-                Decimal("0.00"),
-            ),
+            subtotal=total,
+            total=total,
             email=user.email,
             shipping_name=name,
             shipping_street=street,
