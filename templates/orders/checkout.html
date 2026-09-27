@@ -24,22 +24,49 @@
       <section class="card bg-base-100 shadow-md">
         <div class="card-body">
           <h2 class="card-title">Shipping address</h2>
-          <div class="grid gap-4 sm:grid-cols-2">
-            {% for field in form.shipping_fields %}
-              {% include "orders/partials/_field.html" %}
-            {% endfor %}
+          {% if addresses %}
+            <label class="label" for="saved-shipping">Use a saved address</label>
+            {# A GET sends only this select's value, as ?address=<pk>. #}
+            <select id="saved-shipping" name="address" class="select w-full"
+                    hx-get="{% url 'orders:address_fields' 'shipping' %}"
+                    hx-target="#shipping-fields">
+              <option value="">— Enter a new address —</option>
+              {% for address in addresses %}
+                <option value="{{ address.pk }}" {% if address.is_default_shipping %}selected{% endif %}>{{ address }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          <div id="shipping-fields" class="grid gap-4 sm:grid-cols-2">
+            {% include "orders/partials/_address_fields.html" with fields=form.shipping_fields %}
           </div>
+          <label class="label mt-2 cursor-pointer justify-start gap-2">
+            {{ form.save_shipping }}
+            <span>{{ form.save_shipping.label }}</span>
+          </label>
         </div>
       </section>
 
       <section class="card bg-base-100 shadow-md">
         <div class="card-body">
           <h2 class="card-title">Billing address</h2>
-          <div class="grid gap-4 sm:grid-cols-2">
-            {% for field in form.billing_fields %}
-              {% include "orders/partials/_field.html" %}
-            {% endfor %}
+          {% if addresses %}
+            <label class="label" for="saved-billing">Use a saved address</label>
+            <select id="saved-billing" name="address" class="select w-full"
+                    hx-get="{% url 'orders:address_fields' 'billing' %}"
+                    hx-target="#billing-fields">
+              <option value="">— Enter a new address —</option>
+              {% for address in addresses %}
+                <option value="{{ address.pk }}" {% if address.is_default_billing %}selected{% endif %}>{{ address }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          <div id="billing-fields" class="grid gap-4 sm:grid-cols-2">
+            {% include "orders/partials/_address_fields.html" with fields=form.billing_fields %}
           </div>
+          <label class="label mt-2 cursor-pointer justify-start gap-2">
+            {{ form.save_billing }}
+            <span>{{ form.save_billing.label }}</span>
+          </label>
         </div>
       </section>
 

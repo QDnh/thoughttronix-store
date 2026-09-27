@@ -8,7 +8,8 @@ Demo logins (documented in the README):
 
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history and a live cart
+    customer / customer123  a plain customer, with order history, a live cart,
+                            and two saved addresses
 """
 
 import random
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -494,6 +496,12 @@ SEED_ADDRESSES = [
     ("28 Ganglion Court", "Denver", "CO", "80202"),
 ]
 
+# The customer demo login's address book: (street, line2, city, state, zip).
+# Home is the first saved, so the fill-empty-slots rule makes it the default
+# for both; work shows a non-default card. Their orders all ship home.
+CUSTOMER_HOME = ("214 Synapse Street", "", "Canyon", "TX", "79015")
+CUSTOMER_WORK = ("2600 Neuron Parkway", "Suite 400", "Amarillo", "TX", "79101")
+
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
 
@@ -507,6 +515,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_addresses()
         self._create_orders()
 
         self.stdout.write(
@@ -516,6 +525,7 @@ class Command(BaseCommand):
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
+                f"{Address.objects.count()} saved addresses, "
                 f"and a live cart for 'customer'."
             )
         )
@@ -586,6 +596,20 @@ class Command(BaseCommand):
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
 
+    def _create_customer_addresses(self):
+        """Addresses cascade with their users, so ``_wipe`` already clears them."""
+        customer = get_user_model().objects.get(username="customer")
+        for street, line2, city, state, zip_code in (CUSTOMER_HOME, CUSTOMER_WORK):
+            Address.objects.create(
+                user=customer,
+                name=f"{customer.first_name} {customer.last_name}",
+                street=street,
+                line2=line2,
+                city=city,
+                state=state,
+                zip=zip_code,
+            )
+
     def _create_orders(self):
         """Order history: 4 visible orders for 'customer', 48 background.
 
@@ -609,6 +633,7 @@ class Command(BaseCommand):
                     for slug, quantity in lines
                 ],
                 rng=rng,
+                address=CUSTOMER_HOME,
             )
 
         background = list(
@@ -644,9 +669,14 @@ class Command(BaseCommand):
                 rng=rng,
             )
 
-    def _build_order(self, *, user, created_at, status, lines, rng):
+    def _build_order(self, *, user, created_at, status, lines, rng, address=None):
         """One order with denormalized addresses and purchase-time prices."""
+        # Drawn even when an address is given, so the RNG sequence — and so
+        # every background order — stays the same run to run.
         street, city, state, zip_code = rng.choice(SEED_ADDRESSES)
+        line2 = ""
+        if address:
+            street, line2, city, state, zip_code = address
         name = f"{user.first_name} {user.last_name}"
         order = Order.objects.create(
             user=user,
@@ -658,11 +688,13 @@ class Command(BaseCommand):
             email=user.email,
             shipping_name=name,
             shipping_street=street,
+            shipping_line2=line2,
             shipping_city=city,
             shipping_state=state,
             shipping_zip=zip_code,
             billing_name=name,
             billing_street=street,
+            billing_line2=line2,
             billing_city=city,
             billing_state=state,
             billing_zip=zip_code,

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Delete address — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title">Delete this address?</h1>
+      <p>{{ address }}</p>
+      <p class="opacity-70">
+        Past orders keep their own copy of the address they shipped to.
+        {% if address.is_default_shipping or address.is_default_billing %}
+          This is a default address — checkout won't pre-fill that section
+          until you choose a new default.
+        {% endif %}
+      </p>
+      <form method="post" class="mt-4 flex justify-end gap-2">
+        {% csrf_token %}
+        <a href="{% url 'accounts:addresses' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-error">Delete address</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

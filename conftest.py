@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 
+from accounts.models import Address
 from orders.models import Cart, CartItem
 from products.models import Category, Product, Tag
 
@@ -17,6 +18,50 @@ from products.models import Category, Product, Tag
 def customer(db):
     return get_user_model().objects.create_user(
         username="customer", password="customer123"
+    )
+
+
+@pytest.fixture
+def other_customer(db):
+    return get_user_model().objects.create_user(username="other", password="x")
+
+
+@pytest.fixture
+def address(customer):
+    """The customer's first address — default shipping and billing."""
+    return Address.objects.create(
+        user=customer,
+        name="Casey Monroe",
+        street="214 Synapse Street",
+        city="Canyon",
+        state="TX",
+        zip="79015",
+    )
+
+
+@pytest.fixture
+def second_address(customer, address):
+    """Saved after ``address``, so it is not a default."""
+    return Address.objects.create(
+        user=customer,
+        name="Casey Monroe",
+        street="2600 Neuron Parkway",
+        line2="Suite 400",
+        city="Amarillo",
+        state="TX",
+        zip="79101",
+    )
+
+
+@pytest.fixture
+def other_address(other_customer):
+    return Address.objects.create(
+        user=other_customer,
+        name="Otto Other",
+        street="9 Axon Avenue",
+        city="Norman",
+        state="OK",
+        zip="73019",
     )
 
 

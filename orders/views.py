@@ -9,12 +9,14 @@ validate the form, hand everything to ``place_order``.
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
+from accounts.models import Address
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -116,16 +118,62 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        """Pre-fill each address section from the customer's defaults."""
+        initial = super().get_initial()
+        for address in self.request.user.addresses.all():
+            if address.is_default_shipping:
+                initial.update(address.as_checkout_initial("shipping_"))
+            if address.is_default_billing:
+                initial.update(address.as_checkout_initial("billing_"))
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["cart"] = Cart.for_user(self.request.user)
+        context["addresses"] = self.request.user.addresses.all()
         return context
 
     def form_valid(self, form):
-        cart = Cart.for_user(self.request.user)
-        order = place_order(cart, self.request.user, form.cleaned_data)
+        user = self.request.user
+        order = place_order(Cart.for_user(user), user, form.cleaned_data)
+        # Only after the order succeeds — a failed checkout saves nothing.
+        if form.cleaned_data["save_shipping"]:
+            Address.objects.save_from_checkout(
+                user, form.cleaned_data, prefix="shipping_"
+            )
+        if form.cleaned_data["save_billing"]:
+            Address.objects.save_from_checkout(
+                user, form.cleaned_data, prefix="billing_"
+            )
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutAddressFieldsView(LoginRequiredMixin, View):
+    """HTMX: refill one checkout address section from a saved address.
+
+    ``?address=<pk>`` picks the address (always through the owner); an
+    empty value returns blank fields for typing a new one. Only text boxes
+    change — the checkout POST and its validation are untouched.
+    """
+
+    def get(self, request, section):
+        if section not in ("shipping", "billing"):
+            raise Http404
+        prefix = f"{section}_"
+        pk = request.GET.get("address", "")
+        initial = {}
+        if pk:
+            if not pk.isdigit():
+                raise Http404
+            address = get_object_or_404(Address, pk=pk, user=request.user)
+            initial = address.as_checkout_initial(prefix)
+        form = CheckoutForm(initial=initial)
+        fields = [form[name] for name in form.fields if name.startswith(prefix)]
+        return render(
+            request, "orders/partials/_address_fields.html", {"fields": fields}
+        )
 
 
 class OwnOrdersMixin(LoginRequiredMixin):
