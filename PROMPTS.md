@@ -28,6 +28,137 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-09-27 — Discount codes: design interview, checkout Apply flow, and a Discounts back-office tab
+
+### Prompts
+1. /grill-me A customer should be able to type in a discount code at
+   checkout, and the order total should drop according to the discount.
+   Typing in an expired code should display a message to the customer saying
+   the discount code is expired, rather than a broken page. If a code
+   expires, it should not change an orders that have already used it. The
+   discount code system must be able to support both order-wide discounts
+   and discounts limited to specific products.
+2. Let's go with Option 1. I like that I have the option to add "amount off"
+   code functionality later, if needed.
+3. Option 2. I think the customer should see it before committing to the
+   purchase. They might have multiple codes they want to compare before the
+   purchase.
+4. Let's go with Option 1.
+5. Probably Option 1. I was given the example: 50% off Seraphine for a
+   limited time.
+6. Definitely Option 2.
+7. The prompt I was given said "the plan is seasonal promotions." Which fits
+   that best?
+8. Yes, Option 2 with expires_at required.
+9. I agree, Option 3 sounds better.
+10. Option 1.
+11. Option 1.
+12. Option 1 sounds best. One of the prompts I got was: "Marketing will
+    create and retire codes themselves, without filing a ticket with
+    engineering."
+13. I agree. I think we have the right logic with the prompt I was given.
+    Option 3 would be most convenient.
+14. This was left to my discretion. I agree, I think Option 1 would be best.
+15. I think this looks good. Implement this feature.
+16. *(Correction, after rejecting a combined command that would have run
+    `ruff format` and then migrated and seeded a scratch database through a
+    temporary settings file)* Explain the scratchpad edit.
+17. Run the scratch database check
+18. yes, run ruff format
+19. Will the rule in staff form rather than the model's clean be an issue?
+20. Okay, migrate.
+21. Should I have "git add ." or "git add -A"?
+22. I think there is a problem in the backoffice. I'm logged into admin and I
+    am on /backoffice/discounts/4/edit/. The "Products" selection is not
+    displayed correctly.
+23. Okay, I see. The problem is that the options are listed horizontally.
+    The text of each option is not able to be all on one line.
+24. There we go. Much better. The products are listed vertically and can be
+    read clearly.
+25. Append a session log to PROMPTS.md at the repo root, under today's date,
+    newest entry at the top. Record every prompt I gave you this session, in
+    order, including any corrections. End the entry with a short summary:
+    the outcome, any places where I deviated from a recommended answer or
+    asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** A 12-question design interview settled these decisions:
+  - Codes are percentage-off only.
+  - An HTMX Apply button previews the discount, and `place_order` checks
+    the code again when the order is placed.
+  - One code per order.
+  - A code covers either the entire order or specific products, chosen by
+    an explicit `applies_to` field.
+  - Each code runs from a `starts_at` time to a required `expires_at` time.
+  - Discounts are snapshotted per line, rounded half-up for each line and
+    then summed.
+  - A code that matches nothing in the cart is rejected with its own
+    message.
+  - Codes are managed in a back-office Discounts tab, with an "End now"
+    button, and Delete only for codes no order has used.
+  - No usage limits.
+
+  What was built:
+  - **Model and migration:** a `DiscountCode` model with a
+    `for_checkout()` queryset method, the one place all four customer
+    messages are written. Snapshot fields on `Order` and `OrderItem`.
+    Migration `orders/0003_discount_codes.py` fills `subtotal` in from
+    `total` on existing orders.
+  - **Services:** `quote()` and a live `coupon_code` seam in
+    `orders/services.py`.
+  - **Forms:** `DiscountEntryForm` for checkout and `DiscountCodeForm` for
+    staff.
+  - **Pages and views:** the checkout summary partial with Apply, the
+    discount shown on the order detail and confirmation pages, and the
+    Discounts tab (list with a status filter and empty states, create/edit,
+    End now, delete-if-unused).
+  - **Seed and dashboard:** four demo codes in the seed, one in each state.
+    `top_products` on the dashboard now subtracts line discounts.
+
+  Verification:
+  - The full suite passed, 256 tests, before the final format and CSS
+    changes. After those changes only 79 product and discount tests were
+    rerun.
+  - `ruff check` and `ruff format --check` are clean, and
+    `makemigrations --check` finds no missing migrations.
+  - The seed ran twice with identical results on a scratch database, which
+    was then deleted.
+  - The local database was migrated but not reseeded.
+
+  Nothing is committed.
+- **Deviations:**
+  - The user took the recommended answer on every question except Q6. The
+    agent first recommended `expires_at` only. The user asked which option
+    fits "seasonal promotions," and the agent changed its recommendation to
+    a `starts_at` + `expires_at` window with `expires_at` required, which
+    the user accepted.
+  - Two parts of the approved design were changed during implementation,
+    and only reported afterwards:
+    - Code validation went into a separate `DiscountEntryForm` instead of a
+      `clean_discount_code` on `CheckoutForm`, because the PRD and an
+      existing test forbid `clean*` methods on `CheckoutForm`.
+    - The "specific products need at least one product" rule went into the
+      staff form instead of the model's `clean()`, because a many-to-many
+      can't be read on an unsaved object.
+  - The user asked follow-up questions about the scratchpad edit, whether
+    the form-level rule is a risk, and `git add .` versus `git add -A`.
+    The answer to the last one was neither: stage by path so the
+    unrelated, modified `bash.exe.stackdump` stays out.
+- **Sideways:**
+  - The user rejected a single command that combined `ruff format` with
+    migrating and seeding a scratch database, and asked for an explanation
+    first. The steps were then run separately with the user's approval.
+  - On the discount edit page, the Products multi-select laid its options
+    out horizontally. DaisyUI's `.select` sets `display: inline-flex`. The
+    bug was already in the shared `StyledModelForm` and also affected the
+    product form's Tags field. It was fixed by adding `block` to the
+    multi-select class in `products/forms.py`. The user caught it in the
+    browser, because the tests only check the HTML.
+  - Not raised during the session: the discount input is attached to the
+    checkout form, so pressing Enter in it submits the whole checkout
+    instead of pressing Apply. An invalid code still can't place an order,
+    but Enter doesn't do what Apply does.
+
 ## 2026-09-20 — Add Product.is_featured with a "Featured" badge and tests
 
 ### Prompts
