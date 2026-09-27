@@ -26,7 +26,9 @@ class StyledModelForm(forms.ModelForm):
                 widget.attrs["class"] = "textarea w-full"
                 widget.attrs.setdefault("rows", 6)
             elif isinstance(widget, forms.SelectMultiple):
-                widget.attrs["class"] = "select h-auto w-full"
+                # `block` undoes DaisyUI's inline-flex, which would lay the
+                # options out side by side instead of as a stacked list.
+                widget.attrs["class"] = "select block h-auto w-full"
                 widget.attrs.setdefault("size", 8)
             elif isinstance(widget, forms.Select):
                 widget.attrs["class"] = "select w-full"
