@@ -4,8 +4,8 @@
 
 {% block content %}
   <div class="flex flex-wrap items-center justify-between gap-4">
-    <h1 class="text-3xl font-bold">Your Addresses</h1>
-    <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">Add an address</a>
+    <h1 class="text-3xl font-bold">Saved Addresses</h1>
+    <a href="{% url 'accounts:address_create' %}" class="btn btn-primary btn-sm">+ Add address</a>
   </div>
 
   {% if addresses %}
