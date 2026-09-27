@@ -17,4 +17,4 @@ If the category has products, it will throw a ProtectedError and remain untouche
 The suite is structured so each app contains its own tests. The conftest.py file contains shared test data for the other tests.
 
 6. MY UNDERSTANDING
-I'm still looking through the codebase. There is a lot I still don't understand, like how the pages access login information across pages for example. It will take my some time to understand it all. Claude does help, but not as much as I thought. I'm the type that needs to read code for myself to understand what it does.
+I'm still looking through the codebase. There is a lot I still don't understand, like how the pages access login information across pages for example. It will take my some time to understand it all. Claude does help, but not as much as I thought. I'm the type that needs to read code for myself to understand what it does. I asked Claude "which file manages the login information across the pages", and read the explanation Claude gave me. I came to the conclussion that it is primarily handled by Django itself.
