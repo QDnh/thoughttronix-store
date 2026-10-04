@@ -18,3 +18,4 @@
 - Every list view gets a designed empty state, not a blank page.
 - Styling is Tailwind + DaisyUI classes only; no crispy-forms, no JavaScript
   beyond HTMX.
+- Every page uses DaisyUI semantic classes for colors; never hex values, raw colors, or inline styles.
