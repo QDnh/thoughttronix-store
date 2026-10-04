@@ -1,0 +1,12 @@
+{% load static %}
+{# A product's picture in the catalog's 4:5 frame: its uploaded image, else its category placeholder. #}
+{# onerror: if an uploaded file has gone missing, show the placeholder instead of a broken image. #}
+<img
+  src="{{ product.image_url }}"
+  alt="{{ product.name }}"
+  width="800"
+  height="1000"
+  loading="lazy"
+  class="aspect-[4/5] w-full object-cover"
+  onerror="this.onerror=null;this.src='{% static product.category.placeholder_image %}'"
+/>

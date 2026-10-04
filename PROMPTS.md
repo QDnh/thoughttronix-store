@@ -28,6 +28,72 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images: design interview and implementation handoff
+
+### Prompts
+1. /grill-me We need to add a feature so real images of the products will be
+   on the catalog. Currenty, we only have placeholders there. We have images
+   that are located in the product-images folder. These images need to look
+   consistent whenever they are displayed. The pages that display the images
+   must still respond quickly. Two rules that must be followed: 1, products
+   must display either its uploaded image or placeholder. 2, image files will
+   be upload via the backoffice; should display an error (which must be in
+   plain language) if the image cannot be used by the website; and the file
+   must not be accepted and lost if there is an error.
+2. Option A.
+3. Probably A.
+4. No, they have complex backgrounds. Option A seems best for consistency.
+5. Option A. Seems best for consistency, and I like the option to add an
+   option for a second size later.
+6. Let's go with A.
+7. Option A seems best. I don't think HEIC is a concern. We might also need a
+   default error message.
+8. Option A. B won't work because it needs to be plain text. C is an
+   absolutely not.
+9. I agree. Let's do Option A.
+10. Option A.
+11. Option A. I believe I need these images committed anyway.
+12. (Correction — rejected a tool call that listed seed product names and
+    made preview copies of four images) what is this step?
+13. I was thinking the same thing. 1: Use the No Text versions. 2: I don't
+    know, so assume it is Mark 1 for now. 3: I believe it is.
+14. Option A.
+15. Go with Option A.
+16. I agree. Option A.
+17. Option A. I think Option C is too complicated. Option B could be added
+    later.
+18. /handoff the next session implements the design we just agreed
+19. Append a session log to PROMPTS.md at the repo root, under today's date,
+    newest entry at the top. Record every prompt I gave you this session, in
+    order, including any corrections. End the entry with a short summary: the
+    outcome, any places where I deviated from a recommended answer or asked
+    follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** A 15-question design interview settled the product-images
+  feature: process once at upload (center-crop to 4:5, 800×1000 WebP), keep
+  the original alongside, JPEG/PNG/WebP up to 10 MB and at least 800×1000,
+  plain-language errors plus a catch-all, all-or-nothing saves with a
+  "choose the file again" note, a Remove checkbox, delete-after-commit file
+  cleanup, slug-plus-random filenames, product name as alt text, an
+  `onerror` placeholder fallback, display on catalog/detail/edit preview
+  only, and seed-attached images. The design was written to `HANDOFF.md`
+  for the implementing session; no code was changed and no PRD or plan file
+  was written.
+- **Deviations:** Every recommended option was accepted. The user added
+  input beyond the options: asked for a default (catch-all) error message,
+  which became Question 7; ruled out HEIC support; accepted 4:5 only
+  "probably"; chose "No Text" image variants; and assigned the SoulSear
+  image to Mark I provisionally because they were unsure. Thumbnails in the
+  back-office list were deferred as a later follow-up.
+- **Sideways:** Before Question 11 the agent ran a command to list product
+  names and make preview copies of four ambiguous images without first
+  saying what it was for; the user rejected it and asked "what is this
+  step?". The agent explained and asked the user about the mappings
+  directly instead. While exploring, the agent found an existing bug: the
+  back-office product form lacks `enctype="multipart/form-data"`, so file
+  uploads would be silently dropped; fixing it is part of the handoff.
+
 ## 2026-09-27 — Discount codes: design interview, checkout Apply flow, and a Discounts back-office tab
 
 ### Prompts

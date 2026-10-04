@@ -15,8 +15,10 @@ Demo logins (documented in the README):
 import random
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.core.files import File
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -24,7 +26,12 @@ from django.utils.text import slugify
 
 from accounts.models import Address
 from orders.models import Cart, DiscountCode, Order, OrderItem
+from products.images import process_product_image
 from products.models import Category, Product, Tag
+
+# Product photos, named <product-slug>.png. A product with no file here
+# shows its category placeholder.
+SEED_IMAGES = Path(__file__).resolve().parents[2] / "seed_images"
 
 TAGS = [
     "always listening",
@@ -547,6 +554,8 @@ class Command(BaseCommand):
         Order.objects.all().delete()
         DiscountCode.objects.all().delete()
         Cart.objects.all().delete()
+        # Product's post_delete handler removes the old image files from
+        # media/ once the whole seed commits.
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
@@ -567,7 +576,7 @@ class Command(BaseCommand):
                 name=category_name, slug=slugify(category_name)
             )
             for name, price, tagline, description, tag_names, is_available in entries:
-                product = Product.objects.create(
+                product = Product(
                     name=name,
                     slug=slugify(name),
                     price=price,
@@ -576,6 +585,11 @@ class Command(BaseCommand):
                     is_available=is_available,
                     category=category,
                 )
+                image_path = SEED_IMAGES / f"{product.slug}.png"
+                if image_path.exists():
+                    with image_path.open("rb") as image_file:
+                        product.set_image(process_product_image(File(image_file)))
+                product.save()
                 product.tags.set(tags[tag_name] for tag_name in tag_names)
 
     def _create_users(self):

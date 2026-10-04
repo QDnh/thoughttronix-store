@@ -61,7 +61,7 @@
       <div class="card bg-base-100 shadow-md transition-shadow hover:shadow-xl">
         <figure>
           <a href="{{ product.get_absolute_url }}">
-            <img src="{% static product.category.placeholder_image %}" alt="{{ product.name }}" />
+            {% include "products/partials/_product_image.html" %}
           </a>
         </figure>
         <div class="card-body">

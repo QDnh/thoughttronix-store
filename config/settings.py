@@ -136,6 +136,14 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "assets"]
 
 
+# Uploaded files (product images). Served by Django in development only —
+# see config/urls.py. Gitignored.
+
+MEDIA_URL = "media/"
+
+MEDIA_ROOT = BASE_DIR / "media"
+
+
 # Tailwind CSS + DaisyUI (django-tailwind-cli, standalone binary — no Node.js)
 
 TAILWIND_CLI_USE_DAISY_UI = True

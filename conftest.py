@@ -16,6 +16,13 @@ from orders.models import Cart, CartItem, DiscountCode
 from products.models import Category, Product, Tag
 
 
+@pytest.fixture(autouse=True)
+def media_root(settings, tmp_path):
+    """Every test writes uploaded files to a throwaway folder, never media/."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    return settings.MEDIA_ROOT
+
+
 @pytest.fixture
 def customer(db):
     return get_user_model().objects.create_user(
