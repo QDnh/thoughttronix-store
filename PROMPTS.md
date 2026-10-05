@@ -28,6 +28,63 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images: implementation from the handoff
+
+### Prompts
+1. @HANDOFF.md Implement this feature
+2. Can you switch SoulSear image from Mark 1 to Tactical Core?
+3. Okay. Next, we need to alter the product edit page. The choose file no
+   file chosen does not look like a button.
+4. It looks clear now.
+5. I've already migrated, seeded the database, and committed.
+6. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Implemented the product-images design from `HANDOFF.md`.
+  Added `products/images.py` (one processing function that validates an
+  upload, crops it to 4:5, resizes it to 800×1000, and saves it as WebP,
+  with plain-language errors and a logged catch-all). `Product` gained
+  `image` and `image_original` (migration `0004_product_image`), an
+  `image_url` property with a placeholder fallback, and file cleanup that
+  runs only after a save or delete commits. `ProductForm` takes the upload
+  all-or-nothing and offers a remove checkbox with a preview. Fixed the
+  missing `enctype="multipart/form-data"` on the product form. Added a
+  shared `_product_image.html` partial (4:5 frame, lazy loading, `onerror`
+  fallback) for the catalog and detail pages, and redrew the placeholder
+  SVGs at 4:5. Configured `MEDIA_ROOT`/`MEDIA_URL`, served media in
+  development, and gitignored `media/`. Moved 12 photos to
+  `products/seed_images/<slug>.png`; the seed attaches them. Added 26 tests
+  in `products/test_images.py` plus an autouse temp-`MEDIA_ROOT` fixture in
+  `conftest.py`. The full suite passed (282 tests) and ruff was clean.
+  Then the SoulSear photo was moved from Mark I to Tactical Core (with a
+  test), and the file input was restyled as `file-input file-input-primary`.
+  The user ran `migrate` and `seed` and committed the work themselves.
+- **Deviations:** The user changed the provisional SoulSear mapping from
+  Mark I to Tactical Core. The agent made several calls the handoff didn't
+  settle, and reported them: the "Your image wasn't saved" message shows
+  only when the chosen image itself was valid; the decompression-bomb
+  message omits the MB figure; cleanup uses a `post_delete` signal so bulk
+  deletes are covered; the image fields are hidden from the Django admin;
+  EXIF rotation is applied before cropping. The `onerror` fallback is
+  inline JavaScript, which conflicts with `docs/FRONTEND.md` ("no
+  JavaScript beyond HTMX"); this was flagged but not resolved. The agent
+  did not run `migrate`/`seed` (the seed is destructive) or append to
+  PROMPTS.md unprompted, since this file's rules forbid that even though
+  the handoff asked for it.
+- **Sideways:** `HANDOFF.md` was not at the referenced path; it was found
+  in `thoughttronix-store/`. Ruff flagged model method order (DJ012) and
+  formatting after the first full run; both were fixed. The first CSS
+  build skipped as "up to date" and lacked the new classes until forced
+  with `--force`. Before that forced rebuild, the file input had no
+  DaisyUI styles, so "Choose file" rendered as plain text — the cause of
+  the user's third prompt. The default grey button was still faint on the
+  night theme, so a primary color modifier was added. The change was not
+  checked in a browser by the agent; the user confirmed it looked right.
+
 ## 2026-10-04 — Product images: design interview and implementation handoff
 
 ### Prompts
