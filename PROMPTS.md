@@ -28,6 +28,99 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: design interview and PRD
+
+### Prompts
+1. /grill-me We need to create an Account Security Center feature that
+   expands the current account security features. Customers must be able to
+   do the following: provide an Email address during creating an account,
+   change their password, and reset a forgotten password via email.
+2. Option A.
+3. Option A.
+4. I agree. For this projects scope, Option A.
+5. Option A.
+6. Option C. It is a security hub, so I think changing email should also be
+   a feature there.
+7. Option A. I think changing password should also require the previous
+   password; unless going through forgot password.
+8. Option A. Yes to the password-change notice.
+9. I like Option B.
+10. Go with Option A.
+11. Option A.
+12. Option A. I don't think this project will ever require real emails to be
+    sent.
+13. Option A makes the most sense.
+14. Option A sounds simpler.
+15. Option A.
+16. Option A.
+17. Option A.
+18. I agree. Option A.
+19. /to-prd
+20. Append a session log to PROMPTS.md at the repo root, under today's date,
+    newest entry at the top. Record every prompt I gave you this session, in
+    order, including any corrections. End the entry with a short summary:
+    the outcome, any places where I deviated from a recommended answer or
+    asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** A 17-question design interview settled the Account Security
+  Center:
+  - Email is required on the `User` model, so it applies everywhere
+    (signup, admin "Add user", `createsuperuser`). It is unique, enforced by
+    the database, and lowercased in `User.save()`.
+  - No email verification; login stays username-only, and the reset email
+    includes the username.
+  - A hub page at `/accounts/security/` (sign-in required, staff included,
+    no role checks) shows the username and email and links to separate
+    change-email and change-password pages.
+  - Changing email requires the current password and notifies the old
+    address. Changing or resetting the password requires the old password
+    (change only) and notifies the account's email. The notices are sent by
+    explicit `User` methods, not signals and not a `set_password` override.
+  - Forgot password uses Django's four built-in reset views. Links expire
+    after one hour, the page shows the same message whether or not the email
+    exists, and a successful reset goes to the login page without signing
+    the user in.
+  - Email stays on the console backend, with a `DEFAULT_FROM_EMAIL` added.
+    No rate limiting.
+
+  The PRD was written to `prd/account-security-center.md` with 26 user
+  stories. It notes that it supersedes core-platform user story 6 ("no
+  email"). No code was changed and nothing was committed.
+- **Deviations:**
+  - Q5: the user chose C (the hub also lets you change your email) over the
+    recommended A, reasoning that a security hub should include it. This
+    added Q6 (password required to change email) and Q7 (notifying the old
+    address).
+  - Q11: the user chose A (console email only) over the recommended B
+    (configurable through `.env`), saying the project will never need real
+    email.
+  - Q6: the user also asked that changing the password require the old
+    password, except through forgot password. Django's stock forms already
+    work that way, so it was recorded as a requirement, not a new question.
+  - Q7: the user accepted the agent's suggestion of a password-change
+    notice as well.
+  - The agent decided some things without asking and told the user each
+    time: reset also sends the password-change notice, a
+    `DEFAULT_FROM_EMAIL` is set, and the URL names and template locations
+    follow existing conventions. The PRD also adds a rule rejecting an
+    unchanged email on the change-email page, which was never discussed.
+- **Sideways:**
+  - Q13 exists because the agent found a conflict between earlier answers:
+    with emails unique (Q2) but optional on the model, a second account
+    created through the admin or `createsuperuser` without an email would
+    crash on the duplicate `""`. The user chose to make email required on
+    the model.
+  - In Q14 the agent said lowercasing in `User.clean()` plus the user
+    manager would cover "every path." Reading the seed command showed that
+    was wrong: `seed` builds users with `User(...).save()`, which skips both.
+    The agent corrected it before Q17 and moved lowercasing to
+    `User.save()`; the decision itself (store lowercase) didn't change.
+  - The seed command's background customers have unusable passwords, so
+    Django's reset form skips them. This was recorded in the PRD as
+    expected behavior, not fixed.
+  - The PRD has not been reviewed by the user yet.
+
 ## 2026-10-04 — Product images: implementation from the handoff
 
 ### Prompts
