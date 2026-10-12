@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Security Center — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">Security Center</h1>
+      <p class="opacity-70">
+        Your account recovery depends on these details. Keep them current.
+      </p>
+
+      <dl class="mt-4 space-y-4">
+        <div>
+          <dt class="text-sm opacity-70">Username</dt>
+          <dd class="font-semibold">{{ user.username }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm opacity-70">Email</dt>
+          <dd class="font-semibold">{{ user.email }}</dd>
+        </div>
+      </dl>
+
+      {# The change pages arrive in later phases; the buttons are placeholders until then. #}
+      <div class="card-actions mt-6 justify-end">
+        <button type="button" class="btn btn-outline btn-sm" disabled>Change email</button>
+        <button type="button" class="btn btn-outline btn-sm" disabled>Change password</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}

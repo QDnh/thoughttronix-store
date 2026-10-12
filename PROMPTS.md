@@ -28,6 +28,50 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 2, Security Center hub and navbar link
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 2.
+2. Okay, how can I test these new features in the webpage?
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 2 is built.
+  - `SecurityView` (`LoginRequiredMixin` + `TemplateView`) serves
+    `accounts:security` at `/accounts/security/`, with no role checks.
+  - `templates/accounts/security.html` is a DaisyUI card showing the
+    username and email, with "Change email" and "Change password" buttons.
+  - `templates/base.html` has a "Security" link right after "Addresses",
+    for signed-in users only.
+  - 6 new tests are in `accounts/tests.py`:
+    - the navbar link shows for signed-in users and is hidden from visitors
+    - anonymous visitors are redirected to the login page
+    - the hub shows the username, email and both buttons, run as a
+      customer, an employee and the admin (pytest-django's `admin_user`)
+  - The full suite passed (299 tests), and `ruff check` and
+    `ruff format --check` were clean. Nothing was committed.
+- **Deviations:**
+  - The plan leaves the buttons' destinations to later phases without
+    saying how they should look until then. The agent made them disabled
+    `<button>`s with a template comment, so nothing links to a URL that
+    doesn't exist yet. It flagged this choice, and the user didn't respond
+    to it. Phases 3 and 4 should turn them into links.
+  - The user asked a follow-up question about testing the hub by hand. The
+    agent gave the seed's demo credentials (`customer`/`customer123`,
+    `employee`/`employee123`, `admin`/`admin123`) and a checklist: the
+    navbar link, the hub's contents, the same page for every role, the
+    login redirect with `?next=`, and the link hidden from visitors. It also
+    noted that `seed` is destructive.
+- **Sideways:**
+  - Nothing failed. The manual checks were not run during the session, and
+    nobody has looked at the navbar's layout at narrow widths in a browser.
+    The tests only check the HTML.
+
 ## 2026-10-11 — Account Security Center: Phase 1, every account has a unique email
 
 ### Prompts

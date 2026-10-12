@@ -246,3 +246,42 @@ def test_navbar_greets_signed_in_customer(client, customer):
     assert "Hi, customer" in page
     assert "Sign out" in page
     assert reverse("accounts:signup") not in page
+
+
+def test_navbar_links_to_security_center_when_signed_in(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    assert reverse("accounts:security") in page
+
+
+def test_navbar_hides_security_center_from_visitors(client, db):
+    page = client.get(reverse("products:catalog")).content.decode()
+
+    assert reverse("accounts:security") not in page
+
+
+# --- Security Center ----------------------------------------------------------
+
+
+def test_security_center_requires_login(client, db):
+    response = client.get(reverse("accounts:security"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+@pytest.mark.parametrize("account", ["customer", "staff_user", "admin_user"])
+def test_security_center_shows_username_and_email(client, request, account):
+    user = request.getfixturevalue(account)
+    client.force_login(user)
+
+    response = client.get(reverse("accounts:security"))
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert user.username in page
+    assert user.email in page
+    assert "Change email" in page
+    assert "Change password" in page

@@ -5,7 +5,13 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views import View
-from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
 from .forms import AddressForm, SignInForm, SignupForm
 from .models import Address
@@ -36,6 +42,16 @@ class SignOutView(LogoutView):
         response = super().post(request, *args, **kwargs)
         messages.info(request, "You have signed out.")
         return response
+
+
+# --- The Security Center ----------------------------------------------------
+
+
+class SecurityView(LoginRequiredMixin, TemplateView):
+    """The hub: the signed-in user's username and email, with links to change
+    them. Every account holder gets the same page — no role checks."""
+
+    template_name = "accounts/security.html"
 
 
 # --- The address book -------------------------------------------------------
