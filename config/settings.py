@@ -100,6 +100,9 @@ LOGIN_REDIRECT_URL = "products:catalog"
 
 LOGOUT_REDIRECT_URL = "products:catalog"
 
+# Password reset links expire after one hour.
+PASSWORD_RESET_TIMEOUT = 3600
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",

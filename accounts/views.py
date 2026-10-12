@@ -1,6 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
+from django.contrib.auth.views import (
+    LoginView,
+    LogoutView,
+    PasswordChangeView,
+    PasswordResetConfirmView,
+    PasswordResetDoneView,
+    PasswordResetView,
+)
 from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -20,6 +27,7 @@ from .forms import (
     SignInForm,
     SignupForm,
     StyledPasswordChangeForm,
+    StyledPasswordResetForm,
 )
 from .models import Address
 
@@ -93,6 +101,31 @@ class ChangePasswordView(LoginRequiredMixin, SuccessMessageMixin, PasswordChange
         response = super().form_valid(form)
         self.request.user.notify_password_changed()
         return response
+
+
+# --- Forgot password ----------------------------------------------------------
+
+
+class ForgotPasswordView(PasswordResetView):
+    """Email a one-hour reset link, which also reminds the visitor of their
+    username. Known and unknown emails get the same redirect."""
+
+    form_class = StyledPasswordResetForm
+    template_name = "accounts/password_reset.html"
+    subject_template_name = "accounts/email/password_reset_subject.txt"
+    email_template_name = "accounts/email/password_reset_body.txt"
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+
+class ForgotPasswordDoneView(PasswordResetDoneView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class ResetPasswordView(PasswordResetConfirmView):
+    """The emailed link's destination. Setting the new password arrives in
+    Phase 6; for now the route exists so the link can be built."""
+
+    template_name = "accounts/password_reset_confirm.html"
 
 
 # --- The address book -------------------------------------------------------

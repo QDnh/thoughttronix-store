@@ -28,6 +28,90 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 5, forgot password request and email
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 5.
+2. Okay, how can I test these new features in the webpage?
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 5 is built.
+  - `PASSWORD_RESET_TIMEOUT = 3600` is set in `config/settings.py`.
+    `DEFAULT_FROM_EMAIL` was already set in Phase 3.
+  - `StyledPasswordResetForm` in `accounts/forms.py` is Django's stock
+    `PasswordResetForm` with DaisyUI classes added. Django's form already
+    ignores case when looking up the email, skips accounts with unusable
+    passwords, and doesn't say whether an email matched.
+  - Three views in `accounts/views.py` subclass Django's reset views:
+    - `ForgotPasswordView` serves `accounts:password_reset` at
+      `/accounts/password-reset/`.
+    - `ForgotPasswordDoneView` serves `accounts:password_reset_done` at
+      `/accounts/password-reset/sent/`.
+    - `ResetPasswordView` serves `accounts:password_reset_confirm` at
+      `/accounts/password-reset/<uidb64>/<token>/`.
+  - The confirm page is a placeholder. Django checks the link, but the
+    page says setting a new password "isn't available yet". The plan
+    leaves that page to Phase 6, so the route exists only so the email's
+    link can be built.
+  - New templates:
+    - the request page
+    - the "Check your email" page, which shows the same message whether
+      or not the email matched
+    - the placeholder confirm page
+    - the reset email's subject and body templates in
+      `templates/accounts/email/`. The body includes "Your username is:
+      …", the link, and a note that it expires after one hour.
+  - The login page has a "Forgot password?" link above the Sign in button.
+  - 9 new tests are in `accounts/tests.py`. They cover:
+    - the login page link
+    - the request page using the stock form
+    - the timeout setting
+    - the email's subject, sender and username, checked in the outbox
+    - the emailed link opening the confirm page as a valid link
+    - the lookup ignoring capitalization
+    - an unknown email getting the same redirect and no mail
+    - an account with an unusable password getting no mail
+    - the confirmation page not saying whether the email matched
+  - The full suite passed (327 tests), and `ruff check` was clean.
+    Nothing was committed.
+- **Deviations:**
+  - No recommendations were overridden and no clarifying questions were
+    asked.
+  - The user asked one follow-up question: how to test the feature in the
+    browser. The agent gave steps:
+    - the login page link
+    - a known email, with the email checked in the dev-server terminal
+    - the same email in different capitalization
+    - an unknown email
+    - a background customer with an unusable password (`mwren`)
+    - opening the emailed link, which reaches the placeholder page
+  - It noted:
+    - Phase 3 and 4 testing may have changed the `customer` account's
+      email or password.
+    - `seed` wipes the database.
+    - Django redirects the link to a token-free `set-password` URL.
+  - At the end of Phase 5, the agent offered to commit and to write this
+    log. The user asked for the log only.
+- **Sideways:**
+  - `ruff format --check` flagged `accounts/urls.py` after the first
+    test run. The agent ran `ruff format` on that file, and the rest of
+    the project was already formatted.
+  - Every `uv run` printed the same warning as earlier sessions: the
+    active `VIRTUAL_ENV` (the parent folder's `.venv`) doesn't match the
+    project's `.venv`. uv ignored it and used the project's own
+    environment.
+  - `bash.exe.stackdump` showed up as modified in `git status`. It's a
+    leftover from the shell, not part of this change, and it was also in
+    the Phase 4 commit.
+  - The agent didn't test the feature in a browser. Only the test suite
+    checked it.
+
 ## 2026-10-11 — Account Security Center: Phase 4, change password with a notice
 
 ### Prompts

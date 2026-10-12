@@ -1,9 +1,10 @@
+import re
 from http import HTTPStatus
 
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.forms import PasswordChangeForm, PasswordResetForm
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError
 from django.test import Client
@@ -545,3 +546,96 @@ def test_setting_a_password_elsewhere_sends_no_notice(client, db, mailoutbox):
 
     assert get_user_model().objects.filter(username="newbie").exists()
     assert mailoutbox == []
+
+
+# --- Forgot password: request and email ---------------------------------------
+
+
+RESET_LINK = re.compile(r"https?://testserver(/accounts/password-reset/\S+/\S+/)")
+
+
+def test_login_page_links_to_forgot_password(client, db):
+    page = client.get(reverse("accounts:login")).content.decode()
+
+    assert "Forgot password?" in page
+    assert reverse("accounts:password_reset") in page
+
+
+def test_password_reset_page_returns_200(client, db):
+    response = client.get(reverse("accounts:password_reset"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert isinstance(response.context["form"], PasswordResetForm)
+
+
+def test_password_reset_timeout_is_one_hour():
+    assert settings.PASSWORD_RESET_TIMEOUT == 3600
+
+
+def test_password_reset_emails_link_and_username(client, customer, mailoutbox):
+    response = client.post(
+        reverse("accounts:password_reset"), {"email": "customer@example.com"}
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("accounts:password_reset_done")
+    assert len(mailoutbox) == 1
+    message = mailoutbox[0]
+    assert message.to == ["customer@example.com"]
+    assert message.from_email == settings.DEFAULT_FROM_EMAIL
+    assert message.subject == "Reset your ThoughtTronix password"
+    assert "Your username is: customer" in message.body
+
+
+def test_password_reset_link_reaches_confirm_page(client, customer, mailoutbox):
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+
+    link = RESET_LINK.search(mailoutbox[0].body).group(1)
+    response = client.get(link, follow=True)
+
+    # Django swaps the token into the session and redirects to a token-free
+    # URL; a valid link lands there with ``validlink`` set.
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["validlink"]
+
+
+def test_password_reset_lookup_ignores_case(client, customer, mailoutbox):
+    client.post(reverse("accounts:password_reset"), {"email": "CUSTOMER@Example.com"})
+
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == ["customer@example.com"]
+
+
+def test_password_reset_unknown_email_gets_same_response(client, customer, mailoutbox):
+    known = client.post(
+        reverse("accounts:password_reset"), {"email": "customer@example.com"}
+    )
+    mailoutbox.clear()
+
+    unknown = client.post(
+        reverse("accounts:password_reset"), {"email": "stranger@example.com"}
+    )
+
+    assert unknown.status_code == known.status_code == HTTPStatus.FOUND
+    assert unknown.url == known.url == reverse("accounts:password_reset_done")
+    assert mailoutbox == []
+
+
+def test_password_reset_skips_unusable_password(client, db, mailoutbox):
+    background = get_user_model().objects.create_user(
+        username="background", email="background@example.com"
+    )
+    assert not background.has_usable_password()
+
+    response = client.post(
+        reverse("accounts:password_reset"), {"email": "background@example.com"}
+    )
+
+    assert response.url == reverse("accounts:password_reset_done")
+    assert mailoutbox == []
+
+
+def test_password_reset_done_page_is_noncommittal(client, db):
+    page = client.get(reverse("accounts:password_reset_done")).content.decode()
+
+    assert "If that email belongs to a ThoughtTronix account" in page

@@ -3,6 +3,7 @@ from django.contrib.auth.forms import (
     AdminUserCreationForm,
     AuthenticationForm,
     PasswordChangeForm,
+    PasswordResetForm,
     UserChangeForm,
     UserCreationForm,
 )
@@ -106,6 +107,20 @@ class StyledPasswordChangeForm(PasswordChangeForm):
 
     Validation is all Django's: the old password is checked and the new
     one runs through ``AUTH_PASSWORD_VALIDATORS``, the same as signup.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+
+class StyledPasswordResetForm(PasswordResetForm):
+    """The stock reset-request form (just an email), in DaisyUI.
+
+    Django's lookup ignores case, skips accounts with unusable passwords,
+    and never says whether the email matched, so the page can't be used
+    to find out who has an account.
     """
 
     def __init__(self, *args, **kwargs):
