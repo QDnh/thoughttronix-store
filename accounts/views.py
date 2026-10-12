@@ -4,6 +4,7 @@ from django.contrib.auth.views import (
     LoginView,
     LogoutView,
     PasswordChangeView,
+    PasswordResetCompleteView,
     PasswordResetConfirmView,
     PasswordResetDoneView,
     PasswordResetView,
@@ -28,6 +29,7 @@ from .forms import (
     SignupForm,
     StyledPasswordChangeForm,
     StyledPasswordResetForm,
+    StyledSetPasswordForm,
 )
 from .models import Address
 
@@ -121,11 +123,33 @@ class ForgotPasswordDoneView(PasswordResetDoneView):
     template_name = "accounts/password_reset_done.html"
 
 
-class ResetPasswordView(PasswordResetConfirmView):
-    """The emailed link's destination. Setting the new password arrives in
-    Phase 6; for now the route exists so the link can be built."""
+class ResetPasswordView(SuccessMessageMixin, PasswordResetConfirmView):
+    """The emailed link's destination: set a new password twice, no old one.
 
+    Django rejects links that are over an hour old, already used, or made
+    before the password or email last changed. A successful reset sends
+    the password-changed notice and does not sign the user in
+    (``post_reset_login`` stays off), so they practise the new password
+    on the login page.
+    """
+
+    form_class = StyledSetPasswordForm
     template_name = "accounts/password_reset_confirm.html"
+    success_url = reverse_lazy("accounts:password_reset_complete")
+    success_message = "Password reset — you can now sign in with your new password."
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        form.user.notify_password_changed()
+        return response
+
+
+class ResetPasswordCompleteView(PasswordResetCompleteView):
+    """The last step lands on the login page. The success message is flashed
+    by the confirm view, so visiting this URL directly announces nothing."""
+
+    def get(self, request, *args, **kwargs):
+        return redirect("accounts:login")
 
 
 # --- The address book -------------------------------------------------------

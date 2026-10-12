@@ -1,10 +1,16 @@
 import re
+from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import PasswordChangeForm, PasswordResetForm
+from django.contrib.auth.forms import (
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+)
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError
 from django.test import Client
@@ -639,3 +645,141 @@ def test_password_reset_done_page_is_noncommittal(client, db):
     page = client.get(reverse("accounts:password_reset_done")).content.decode()
 
     assert "If that email belongs to a ThoughtTronix account" in page
+
+
+# --- Forgot password: set a new password --------------------------------------
+
+
+NEW_PASSWORD = "fresh-Synapse-42"
+
+
+def open_reset_link(client, mailoutbox):
+    """Request a reset for the customer and follow the emailed link.
+
+    Returns the response for the token-free ``set-password`` page that
+    Django redirects to.
+    """
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+    link = RESET_LINK.search(mailoutbox[-1].body).group(1)
+    return client.get(link, follow=True)
+
+
+def set_new_password(client, page, password=NEW_PASSWORD):
+    url = page.redirect_chain[-1][0]
+    return client.post(
+        url, {"new_password1": password, "new_password2": password}, follow=True
+    )
+
+
+def test_password_reset_confirm_uses_stock_form(client, customer, mailoutbox):
+    page = open_reset_link(client, mailoutbox)
+
+    assert isinstance(page.context["form"], SetPasswordForm)
+    assert "old_password" not in page.context["form"].fields
+
+
+def test_password_reset_sets_password_and_lands_on_login(client, customer, mailoutbox):
+    page = open_reset_link(client, mailoutbox)
+
+    response = set_new_password(client, page)
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:login")
+    assert "Password reset" in response.content.decode()
+    customer.refresh_from_db()
+    assert customer.check_password(NEW_PASSWORD)
+    assert Client().login(username="customer", password=NEW_PASSWORD)
+
+
+def test_password_reset_does_not_sign_in(client, customer, mailoutbox):
+    page = open_reset_link(client, mailoutbox)
+
+    set_new_password(client, page)
+
+    assert "_auth_user_id" not in client.session
+
+
+def test_password_reset_notifies_account_email(client, customer, mailoutbox):
+    page = open_reset_link(client, mailoutbox)
+    mailoutbox.clear()
+
+    set_new_password(client, page)
+
+    assert len(mailoutbox) == 1
+    notice = mailoutbox[0]
+    assert notice.to == ["customer@example.com"]
+    assert "password on your ThoughtTronix account was just changed" in notice.body
+
+
+def test_password_reset_enforces_password_validators(client, customer, mailoutbox):
+    page = open_reset_link(client, mailoutbox)
+    mailoutbox.clear()
+
+    response = set_new_password(client, page, password="password")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["new_password2"]
+    customer.refresh_from_db()
+    assert customer.check_password("customer123")
+    assert mailoutbox == []
+
+
+def test_password_reset_complete_redirects_to_login_silently(client, db):
+    response = client.get(reverse("accounts:password_reset_complete"), follow=True)
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:login")
+    assert "Password reset" not in response.content.decode()
+
+
+def assert_link_rejected(page):
+    assert page.status_code == HTTPStatus.OK
+    assert not page.context["validlink"]
+    content = page.content.decode()
+    assert "invalid or has expired" in content
+    assert reverse("accounts:password_reset") in content
+
+
+def test_password_reset_link_rejected_after_one_hour(
+    client, customer, mailoutbox, monkeypatch
+):
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+    link = RESET_LINK.search(mailoutbox[0].body).group(1)
+    later = datetime.now() + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT + 1)
+    monkeypatch.setattr(PasswordResetTokenGenerator, "_now", lambda self: later)
+
+    assert_link_rejected(client.get(link, follow=True))
+
+
+def test_password_reset_link_rejected_after_use(client, customer, mailoutbox):
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+    link = RESET_LINK.search(mailoutbox[0].body).group(1)
+    set_new_password(client, client.get(link, follow=True))
+
+    assert_link_rejected(client.get(link, follow=True))
+
+
+def test_password_reset_link_rejected_after_password_change(
+    client, customer, mailoutbox
+):
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+    link = RESET_LINK.search(mailoutbox[0].body).group(1)
+    customer.set_password("another-Synapse-42")
+    customer.save()
+
+    assert_link_rejected(client.get(link, follow=True))
+
+
+def test_password_reset_link_rejected_after_email_change(client, customer, mailoutbox):
+    client.post(reverse("accounts:password_reset"), {"email": "customer@example.com"})
+    link = RESET_LINK.search(mailoutbox[0].body).group(1)
+    customer.change_email("moved@example.com")
+
+    assert_link_rejected(client.get(link, follow=True))
+
+
+def test_password_reset_garbage_link_rejected(client, db):
+    url = reverse(
+        "accounts:password_reset_confirm",
+        kwargs={"uidb64": "MQ", "token": "not-a-token"},
+    )
+
+    assert_link_rejected(client.get(url, follow=True))

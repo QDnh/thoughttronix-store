@@ -28,6 +28,88 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 6, forgot password set a new password
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 6.
+2. Okay, how can I test these new features in the webpage?
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 6 is built, which completes the Account Security
+  Center plan.
+  - `StyledSetPasswordForm` in `accounts/forms.py` is Django's stock
+    `SetPasswordForm` with DaisyUI classes added. It asks for the new
+    password twice, never the old one, and runs the project's password
+    validators.
+  - `ResetPasswordView` (`accounts:password_reset_confirm`) now uses that
+    form. On success it:
+    - calls `User.notify_password_changed()`,
+    - adds a "Password reset — you can now sign in with your new
+      password." success message,
+    - redirects to `accounts:password_reset_complete`.
+
+    `post_reset_login` stays off, so the user is not signed in.
+  - The new `ResetPasswordCompleteView` subclasses
+    `PasswordResetCompleteView` and serves `accounts:password_reset_complete`
+    at `/accounts/password-reset/complete/`. Its `get` redirects to the
+    login page. The success message is added by the confirm view, so
+    opening this URL directly shows no message.
+  - `templates/accounts/password_reset_confirm.html` replaces the Phase 5
+    placeholder.
+    - A valid link shows the form, naming the username, with errors beside
+      each field.
+    - Any other link shows "Link invalid or expired" and a "Request a new
+      link" button.
+  - 11 new tests are in `accounts/tests.py`. They cover:
+    - the stock form being used, with no old-password field
+    - the password being set, landing on the login page with the message,
+      and the new password signing in
+    - the user not being signed in after a reset
+    - the notice, checked in the outbox
+    - a weak password being rejected, with no change and no mail
+    - opening the complete URL directly redirecting with no message
+    - links rejected after one hour, after use, after a password change,
+      after an email change, and when made up
+  - The one-hour test fakes the clock by monkeypatching the private
+    `PasswordResetTokenGenerator._now`, which avoids adding a time-freezing
+    dependency.
+  - The full suite passed (338 tests). `ruff check` and
+    `ruff format --check` were clean. Nothing was committed.
+- **Deviations:**
+  - No recommendations were overridden and no clarifying questions were
+    asked.
+  - Phase 6 needed one design choice the plan didn't settle: where the
+    success message comes from. The agent decided it without asking. The
+    confirm view adds the message and the complete view only redirects, so
+    the bare complete URL can't show a false "Password reset" message.
+  - The user asked one follow-up question: how to test the feature in the
+    browser. The agent gave steps for:
+    - a full reset: request, copy the link from the dev-server terminal,
+      set a password, land signed out on the login page with the message,
+      see the notice email, and sign in with the new password
+    - weak and mismatched passwords
+    - links rejected after use, after a password change, after an email
+      change, and when made up
+    - opening the complete URL directly
+  - It noted:
+    - Testing earlier phases may have changed the `customer` account's
+      details, and `seed` wipes the database.
+    - Expiry can be checked by hand by setting `PASSWORD_RESET_TIMEOUT` to
+      60 for a while.
+- **Sideways:**
+  - Nothing failed.
+  - `uv` warned that the active `VIRTUAL_ENV` (the parent folder's
+    `.venv`) doesn't match the project's `.venv` and was ignored. The
+    warning was harmless.
+  - The plan's acceptance-criteria checkboxes were left unticked, as in
+    earlier phases.
+
 ## 2026-10-11 — Account Security Center: Phase 5, forgot password request and email
 
 ### Prompts

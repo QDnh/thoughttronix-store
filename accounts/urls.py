@@ -26,6 +26,11 @@ urlpatterns = [
         views.ResetPasswordView.as_view(),
         name="password_reset_confirm",
     ),
+    path(
+        "password-reset/complete/",
+        views.ResetPasswordCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
     path("addresses/", views.AddressListView.as_view(), name="addresses"),
     path("addresses/new/", views.AddressCreateView.as_view(), name="address_create"),
     path(
