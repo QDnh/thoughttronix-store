@@ -1,0 +1,10 @@
+{% autoescape off %}Hi {{ user.username }},
+
+The email address on your ThoughtTronix account was just changed to {{ masked_email }}. This address will no longer receive account messages, including password resets.
+
+If you made this change, you don't need to do anything.
+
+If you didn't make this change, contact ThoughtTronix support right away so we can secure your account.
+
+— The ThoughtTronix Store
+{% endautoescape %}

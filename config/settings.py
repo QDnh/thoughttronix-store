@@ -157,3 +157,5 @@ TAILWIND_CLI_SRC_CSS = "assets/css/source.css"
 # Email — console backend only; real mail is out of scope for the core.
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = "ThoughtTronix <no-reply@thoughttronix.example>"

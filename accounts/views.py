@@ -8,12 +8,13 @@ from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
 )
 
-from .forms import AddressForm, SignInForm, SignupForm
+from .forms import AddressForm, ChangeEmailForm, SignInForm, SignupForm
 from .models import Address
 
 
@@ -52,6 +53,22 @@ class SecurityView(LoginRequiredMixin, TemplateView):
     them. Every account holder gets the same page — no role checks."""
 
     template_name = "accounts/security.html"
+
+
+class ChangeEmailView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    """Change email with the current password; the old address gets a notice."""
+
+    form_class = ChangeEmailForm
+    template_name = "accounts/change_email.html"
+    success_url = reverse_lazy("accounts:security")
+    success_message = "Email updated."
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        self.request.user.change_email(form.cleaned_data["email"])
+        return super().form_valid(form)
 
 
 # --- The address book -------------------------------------------------------

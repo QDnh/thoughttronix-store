@@ -21,9 +21,9 @@
         </div>
       </dl>
 
-      {# The change pages arrive in later phases; the buttons are placeholders until then. #}
+      {# Change password arrives in a later phase; its button is a placeholder until then. #}
       <div class="card-actions mt-6 justify-end">
-        <button type="button" class="btn btn-outline btn-sm" disabled>Change email</button>
+        <a href="{% url 'accounts:change_email' %}" class="btn btn-outline btn-sm">Change email</a>
         <button type="button" class="btn btn-outline btn-sm" disabled>Change password</button>
       </div>
     </div>

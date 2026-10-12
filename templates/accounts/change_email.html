@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Change email — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">Change email</h1>
+      <p class="opacity-70">
+        Your current email is <span class="font-semibold">{{ user.email }}</span>.
+        We'll send a notice there once the change is saved.
+      </p>
+
+      <form method="post" class="mt-4 space-y-4">
+        {% csrf_token %}
+
+        {% for error in form.non_field_errors %}
+          <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+        {% endfor %}
+
+        {% for field in form %}
+          {% include "orders/partials/_field.html" %}
+        {% endfor %}
+
+        <div class="flex justify-end gap-2">
+          <a href="{% url 'accounts:security' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save email</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -3,7 +3,9 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.mail import send_mail
 from django.db import models, transaction
+from django.template.loader import render_to_string
 
 from .validators import US_STATES, zip_validator
 
@@ -40,6 +42,31 @@ class User(AbstractUser):
         """Lowercase the email on every path: signup, admin, shell, seed."""
         self.email = self.email.lower()
         super().save(*args, **kwargs)
+
+    def change_email(self, new_email: str) -> None:
+        """Save a new email and send a notice to the *old* address.
+
+        The notice names the new address only in masked form, so a
+        stranger who changed it learns nothing new from the old inbox.
+        Nothing is sent to the new address.
+        """
+        old_email = self.email
+        self.email = new_email
+        self.save(update_fields=["email"])
+        context = {"user": self, "masked_email": mask_email(self.email)}
+        subject = render_to_string("accounts/email/email_changed_subject.txt", context)
+        send_mail(
+            "".join(subject.splitlines()),
+            render_to_string("accounts/email/email_changed_body.txt", context),
+            None,  # DEFAULT_FROM_EMAIL
+            [old_email],
+        )
+
+
+def mask_email(email: str) -> str:
+    """``casey@example.com`` -> ``c***@example.com``."""
+    local, _, domain = email.partition("@")
+    return f"{local[:1]}***@{domain}"
 
 
 class AddressManager(models.Manager):

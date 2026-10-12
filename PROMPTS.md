@@ -28,6 +28,64 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 3, change email with a notice to the old address
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 3.
+2. Okay, how can I test these new features in the webpage?
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 3 is built.
+  - `User.change_email(new_email)` in `accounts/models.py` saves the new
+    address and emails a notice to the old one only. The notice shows the
+    new address masked (`c***@example.com`) through a new `mask_email()`
+    helper, and tells the owner to contact support if the change wasn't
+    theirs. Its subject and body templates are in
+    `templates/accounts/email/`.
+  - `ChangeEmailForm` in `accounts/forms.py` takes a new email and the
+    current password. It lowercases the email and rejects a wrong
+    password, an email another account uses (in any capitalization), and
+    the user's own current email. It's a plain `Form` that takes the user,
+    not a `ModelForm`. A `ModelForm` would set the user's email during
+    validation, before `change_email()` could read the old address.
+  - `ChangeEmailView` (`LoginRequiredMixin` + `FormView`) serves
+    `accounts:change_email` at `/accounts/security/email/`. It's backed by
+    `templates/accounts/change_email.html`, and on success it returns to
+    the hub with "Email updated."
+  - The hub's "Change email" button is now a link. "Change password" stays
+    a disabled placeholder until Phase 4.
+  - `DEFAULT_FROM_EMAIL` is now
+    `ThoughtTronix <no-reply@thoughttronix.example>`.
+  - 10 new tests are in `accounts/tests.py`. They cover sign-in being
+    required, a successful change saved lowercased, each rejection, the
+    typed email kept after an error, and an outbox check: one notice, to
+    the old address, from the store sender, with only the masked new
+    address in it.
+  - The full suite passed (308 tests), and `ruff check` and `ruff format`
+    were clean. Nothing was committed.
+- **Deviations:**
+  - No recommendations were overridden and no clarifying questions were
+    asked.
+  - The user asked one follow-up question: how to test the feature in the
+    browser. The agent gave steps using the seeded `customer` account,
+    checking the notice in the dev-server terminal, the three rejection
+    cases, and the sign-in redirect. It warned that `seed` wipes the
+    database.
+  - At the end of Phase 3, the agent offered to commit and to write this
+    log. The user asked for the log only.
+- **Sideways:**
+  - Nothing failed. Every `uv run` printed a warning that the active
+    `VIRTUAL_ENV` (the parent folder's `.venv`) doesn't match the project's
+    `.venv`. uv ignored it and used the project's own environment.
+  - The agent didn't test the feature in a browser. Only the test suite
+    checked it.
+
 ## 2026-10-11 — Account Security Center: Phase 2, Security Center hub and navbar link
 
 ### Prompts

@@ -1,12 +1,14 @@
 from http import HTTPStatus
 
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError
 from django.urls import reverse
 
 from accounts.forms import AdminAddUserForm
+from accounts.models import mask_email
 
 # --- Signup -----------------------------------------------------------------
 
@@ -285,3 +287,111 @@ def test_security_center_shows_username_and_email(client, request, account):
     assert user.email in page
     assert "Change email" in page
     assert "Change password" in page
+
+
+def test_security_center_links_to_change_email(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:security")).content.decode()
+
+    assert reverse("accounts:change_email") in page
+
+
+# --- Change email -------------------------------------------------------------
+
+
+def test_mask_email():
+    assert mask_email("casey@example.com") == "c***@example.com"
+
+
+def test_change_email_requires_login(client, db):
+    response = client.get(reverse("accounts:change_email"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_change_email_page_returns_200(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("accounts:change_email"))
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_change_email_saves_lowercased_and_returns_to_hub(client, customer):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("accounts:change_email"),
+        {"email": "Casey@NewMail.example", "password": "customer123"},
+        follow=True,
+    )
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:security")
+    assert "Email updated." in response.content.decode()
+    customer.refresh_from_db()
+    assert customer.email == "casey@newmail.example"
+
+
+def test_change_email_notifies_old_address_only(client, customer, mailoutbox):
+    client.force_login(customer)
+
+    client.post(
+        reverse("accounts:change_email"),
+        {"email": "casey@newmail.example", "password": "customer123"},
+    )
+
+    assert len(mailoutbox) == 1
+    notice = mailoutbox[0]
+    assert notice.to == ["customer@example.com"]
+    assert notice.from_email == settings.DEFAULT_FROM_EMAIL
+    assert "c***@newmail.example" in notice.body
+    assert "casey@newmail.example" not in notice.body
+
+
+def test_change_email_rejects_wrong_password(client, customer, mailoutbox):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("accounts:change_email"),
+        {"email": "casey@newmail.example", "password": "wrong"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["password"]
+    # The typed email is kept so the user only fixes the password.
+    assert 'value="casey@newmail.example"' in response.content.decode()
+    customer.refresh_from_db()
+    assert customer.email == "customer@example.com"
+    assert mailoutbox == []
+
+
+def test_change_email_rejects_email_in_use_regardless_of_case(
+    client, customer, other_customer, mailoutbox
+):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("accounts:change_email"),
+        {"email": "Other@Example.com", "password": "customer123"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["email"] == ["That email is already in use."]
+    customer.refresh_from_db()
+    assert customer.email == "customer@example.com"
+    assert mailoutbox == []
+
+
+def test_change_email_rejects_unchanged_email(client, customer, mailoutbox):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("accounts:change_email"),
+        {"email": "CUSTOMER@example.com", "password": "customer123"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["email"] == ["That is already your email."]
+    assert mailoutbox == []

@@ -65,6 +65,41 @@ class AdminChangeUserForm(UniqueEmailMixin, UserChangeForm):
         model = User
 
 
+class ChangeEmailForm(forms.Form):
+    """A new email, confirmed with the signed-in user's current password.
+
+    The password check stops someone at an unattended, signed-in session
+    from redirecting the account's recovery to an inbox they control.
+    """
+
+    email = forms.EmailField(label="New email")
+    password = forms.CharField(
+        label="Current password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].lower()
+        if email == self.user.email:
+            raise forms.ValidationError("That is already your email.")
+        if User.objects.exclude(pk=self.user.pk).filter(email=email).exists():
+            raise forms.ValidationError("That email is already in use.")
+        return email
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError("Your password was entered incorrectly.")
+        return password
+
+
 class AddressForm(forms.ModelForm):
     """Add or edit an address-book entry.
 
