@@ -1,7 +1,12 @@
 from http import HTTPStatus
 
+import pytest
 from django.contrib.auth import get_user_model
+from django.core.management import CommandError, call_command
+from django.db import IntegrityError
 from django.urls import reverse
+
+from accounts.forms import AdminAddUserForm
 
 # --- Signup -----------------------------------------------------------------
 
@@ -17,6 +22,7 @@ def test_signup_creates_plain_customer(client, db):
         reverse("accounts:signup"),
         {
             "username": "fresh-thinker",
+            "email": "fresh@example.com",
             "password1": "neural-implant-9000",
             "password2": "neural-implant-9000",
         },
@@ -39,6 +45,7 @@ def test_signup_password_mismatch_shows_field_error(client, db):
         reverse("accounts:signup"),
         {
             "username": "fresh-thinker",
+            "email": "fresh@example.com",
             "password1": "neural-implant-9000",
             "password2": "neural-implant-9001",
         },
@@ -47,6 +54,137 @@ def test_signup_password_mismatch_shows_field_error(client, db):
     assert response.status_code == HTTPStatus.OK
     assert response.context["form"].errors["password2"]
     assert not get_user_model().objects.filter(username="fresh-thinker").exists()
+
+
+def test_signup_requires_email(client, db):
+    response = client.post(
+        reverse("accounts:signup"),
+        {
+            "username": "fresh-thinker",
+            "password1": "neural-implant-9000",
+            "password2": "neural-implant-9000",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["email"]
+    assert not get_user_model().objects.filter(username="fresh-thinker").exists()
+
+
+def test_signup_rejects_email_in_use_regardless_of_case(client, customer):
+    response = client.post(
+        reverse("accounts:signup"),
+        {
+            "username": "fresh-thinker",
+            "email": "Customer@Example.COM",
+            "password1": "neural-implant-9000",
+            "password2": "neural-implant-9000",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["email"] == ["That email is already in use."]
+    assert not get_user_model().objects.filter(username="fresh-thinker").exists()
+
+
+def test_signup_stores_email_lowercased(client, db):
+    client.post(
+        reverse("accounts:signup"),
+        {
+            "username": "fresh-thinker",
+            "email": "Fresh@Example.com",
+            "password1": "neural-implant-9000",
+            "password2": "neural-implant-9000",
+        },
+    )
+
+    user = get_user_model().objects.get(username="fresh-thinker")
+    assert user.email == "fresh@example.com"
+
+
+# --- Email on the user model --------------------------------------------------
+
+
+def test_save_lowercases_email(db):
+    user = get_user_model().objects.create_user(
+        username="shouty", email="SHOUTY@Example.com", password="x"
+    )
+
+    user.refresh_from_db()
+    assert user.email == "shouty@example.com"
+
+
+def test_database_rejects_blank_email(db):
+    with pytest.raises(IntegrityError):
+        get_user_model().objects.create_user(username="nobody", password="x")
+
+
+def test_database_rejects_duplicate_email_regardless_of_case(customer):
+    with pytest.raises(IntegrityError):
+        get_user_model().objects.create_user(
+            username="copycat", email="CUSTOMER@example.com", password="x"
+        )
+
+
+def test_createsuperuser_refuses_blank_email(db):
+    with pytest.raises(CommandError):
+        call_command("createsuperuser", interactive=False, username="boss", email="")
+
+    assert not get_user_model().objects.filter(username="boss").exists()
+
+
+def test_createsuperuser_stores_email(db):
+    call_command(
+        "createsuperuser",
+        interactive=False,
+        username="boss",
+        email="Boss@Example.com",
+        verbosity=0,
+    )
+
+    assert get_user_model().objects.get(username="boss").email == "boss@example.com"
+
+
+# --- Admin "Add user" ---------------------------------------------------------
+
+
+ADMIN_ADD_USER = {
+    "username": "new-hire",
+    "usable_password": "true",
+    "password1": "neural-implant-9000",
+    "password2": "neural-implant-9000",
+}
+
+
+def test_admin_add_user_form_requires_email(db):
+    form = AdminAddUserForm(data=ADMIN_ADD_USER)
+
+    assert not form.is_valid()
+    assert form.errors["email"]
+
+
+def test_admin_add_user_form_rejects_email_in_use_regardless_of_case(customer):
+    form = AdminAddUserForm(data={**ADMIN_ADD_USER, "email": "Customer@example.com"})
+
+    assert not form.is_valid()
+    assert form.errors["email"] == ["That email is already in use."]
+
+
+def test_admin_add_user_page_creates_user_with_email(admin_client):
+    response = admin_client.post(
+        reverse("admin:accounts_user_add"),
+        {
+            **ADMIN_ADD_USER,
+            "email": "New-Hire@example.com",
+            # The empty address inline's management form, as a browser sends it.
+            "addresses-TOTAL_FORMS": "0",
+            "addresses-INITIAL_FORMS": "0",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    user = get_user_model().objects.get(username="new-hire")
+    assert user.email == "new-hire@example.com"
 
 
 # --- Login and logout --------------------------------------------------------

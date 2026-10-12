@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from .forms import AdminAddUserForm, AdminChangeUserForm
 from .models import Address, User
 
 
@@ -13,6 +14,23 @@ class AddressInline(admin.TabularInline):
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
+    add_form = AdminAddUserForm
+    form = AdminChangeUserForm
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "email",
+                    "usable_password",
+                    "password1",
+                    "password2",
+                ),
+            },
+        ),
+    )
     fieldsets = (
         *DjangoUserAdmin.fieldsets,
         ("ThoughtTronix", {"fields": ("job_title",)}),

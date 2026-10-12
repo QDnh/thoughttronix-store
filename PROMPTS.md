@@ -28,6 +28,75 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 1, every account has a unique email
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 1.
+2. Okay, how can I test these new features in the webpage?
+3. During manual test 4, when I entered the admin@example.com email, the
+   terminal freezes.
+4. What would you recommend?
+5. Add the note and leave createsuperuser as it is. I'm not sure if
+   altering it will cause problems later, so I think it is best to leave
+   it.
+6. Okay, verify Phase 1 again to ensure it has been completed.
+7. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 1 is complete, and all eight acceptance criteria were
+  checked one by one.
+  - `User.email` is required and unique. It has an
+    `"That email is already in use."` message and a database check
+    constraint against blanks. `User.save()` lowercases the email, and
+    `REQUIRED_FIELDS = ["email"]`. The migration is
+    `accounts/migrations/0003_user_email_required_unique.py`.
+  - A `UniqueEmailMixin` in `accounts/forms.py` lowercases the email and
+    checks it against other accounts. It is used by the signup form, which
+    now asks for email, and by new admin add-user and edit-user forms. The
+    admin's "Add user" page includes email.
+  - Emails were added to the conftest user fixtures and to the two inline
+    users in `orders/tests.py`. 13 new tests are in `accounts/tests.py`.
+  - The final run had 293 tests passing, ruff clean,
+    `makemigrations --check` clean and `manage.py check` clean.
+  - Nothing was committed. The local `db.sqlite3` grading snapshot was
+    migrated (see Sideways).
+- **Deviations:**
+  - The agent applied the case-insensitive duplicate check to the admin's
+    edit-user form as well, which the plan doesn't ask for. Without it, a
+    different-case duplicate would crash the page with an `IntegrityError`.
+  - The user asked follow-up questions about testing the features by hand,
+    about the frozen terminal, and for a recommendation.
+  - The user followed the agent's recommendation: leave `createsuperuser`
+    as it is and record the gap in the PRD, rather than override the command
+    and move `accounts` above `django.contrib.auth` in `INSTALLED_APPS`. The
+    note is in the PRD's Further Notes.
+- **Sideways:**
+  - On the first full run, the new admin add-user test failed (200 instead
+    of a 302). The post was missing the address inline's management-form
+    fields. The test was fixed, and the code didn't need to change.
+  - The manual testing steps were wrong about `createsuperuser`. They said
+    it would reject `admin@example.com` as already in use. Django's command
+    only runs `field.clean()` on the email, so it catches a blank but not a
+    duplicate. The duplicate goes on to the password prompt and then fails
+    with an `IntegrityError`, and no account is created. The user's
+    "frozen" terminal was most likely that password prompt: `getpass` never
+    echoes, and in Git Bash (mintty) it receives no keystrokes at all. The
+    agent suggested PowerShell or `winpty` instead. This was caught by the
+    user in manual testing and confirmed in Django's source.
+  - The agent did not migrate the tracked `db.sqlite3`, but a later
+    `showmigrations` showed 0003 already applied, most likely from the
+    user's run of the manual testing steps. While this entry was being
+    written, `git status` showed `db.sqlite3` modified and all 30 tracked
+    product images under `media/products/` deleted. Running `seed`
+    rebuilds the images under new file names, so the committed grading
+    snapshot no longer matches the working tree. They can be restored with
+    `git checkout db.sqlite3 media/`, which would also undo the migration.
+
 ## 2026-10-11 — Account Security Center: PRD to phased plan
 
 ### Prompts

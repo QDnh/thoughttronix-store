@@ -13,10 +13,33 @@ class User(AbstractUser):
 
     Roles use Django's own vocabulary and nothing else: customers are
     plain users, employees are ``is_staff``, the admin is ``is_superuser``.
+
+    Every account has an email, unique across the store. It is stored
+    lowercased, so the plain unique constraint is case-insensitive.
     """
 
+    email = models.EmailField(
+        "email address",
+        unique=True,
+        error_messages={"unique": "That email is already in use."},
+    )
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
+
+    REQUIRED_FIELDS = ["email"]
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(email=""),
+                name="user_email_not_blank",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        """Lowercase the email on every path: signup, admin, shell, seed."""
+        self.email = self.email.lower()
+        super().save(*args, **kwargs)
 
 
 class AddressManager(models.Manager):

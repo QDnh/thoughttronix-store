@@ -127,6 +127,7 @@ Email is delivered to the development console only. No real mail leaves the appl
 ## Further Notes
 
 - **Known enumeration gap.** The reset page doesn't reveal whether an email is registered, but signup does ("that email is already in use"), because emails are unique. This is a deliberate trade-off. Closing it would require email verification, which is out of scope.
+- **`createsuperuser` doesn't pre-check duplicate emails.** Django's command checks only that the email isn't blank. A duplicate email gets through the prompts and is then rejected by the database's unique constraint with an `IntegrityError`, and no account is created. A friendly message would require overriding the command and moving `accounts` above `django.contrib.auth` in `INSTALLED_APPS`. That isn't worth it for an admin-only command-line tool.
 - **Background customers can't reset.** The seed command's background customers have unusable passwords, and Django's reset form skips those accounts, so "Forgot password?" sends them nothing. This is expected: they exist to populate the dashboard and are never signed in to.
 - **Email change invalidates pending reset links.** Django's reset token includes the user's email, so changing email (like changing password) voids any outstanding reset link.
 - **Testing the flow by hand.** With the console backend, the reset link appears in the terminal running the dev server and is copied into the browser from there.
