@@ -53,13 +53,29 @@ class User(AbstractUser):
         old_email = self.email
         self.email = new_email
         self.save(update_fields=["email"])
-        context = {"user": self, "masked_email": mask_email(self.email)}
-        subject = render_to_string("accounts/email/email_changed_subject.txt", context)
+        self._send_notice(
+            "email_changed", old_email, masked_email=mask_email(self.email)
+        )
+
+    def notify_password_changed(self) -> None:
+        """Email the account's address that its password was changed.
+
+        Called explicitly by the change-password and reset-confirm views.
+        ``set_password`` is deliberately not overridden: signup,
+        ``createsuperuser``, the seed and the tests all call it, and none
+        of them should send a notice.
+        """
+        self._send_notice("password_changed", self.email)
+
+    def _send_notice(self, name: str, recipient: str, **extra: Any) -> None:
+        """Render ``accounts/email/<name>_{subject,body}.txt`` and send it."""
+        context = {"user": self, **extra}
+        subject = render_to_string(f"accounts/email/{name}_subject.txt", context)
         send_mail(
             "".join(subject.splitlines()),
-            render_to_string("accounts/email/email_changed_body.txt", context),
+            render_to_string(f"accounts/email/{name}_body.txt", context),
             None,  # DEFAULT_FROM_EMAIL
-            [old_email],
+            [recipient],
         )
 
 

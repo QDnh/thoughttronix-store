@@ -230,8 +230,11 @@ def test_catalog_paginates_at_twelve(client, category):
 # --- The seed command -------------------------------------------------------
 
 
-def test_seed_builds_the_demo_world(db):
+def test_seed_builds_the_demo_world(db, mailoutbox):
     call_command("seed")
+
+    # Seeding sets passwords but must not send password-changed notices.
+    assert mailoutbox == []
 
     assert Category.objects.count() == 6
     assert Tag.objects.count() == 12

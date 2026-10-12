@@ -28,6 +28,68 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account Security Center: Phase 4, change password with a notice
+
+### Prompts
+1. @prd/account-security-center.md @plans/account-security-center.md Do
+   Phase 4.
+2. Okay, how can I test these new features in the webpage?
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Phase 4 is built.
+  - `User.notify_password_changed()` in `accounts/models.py` emails the
+    account's own address. `set_password` is not overridden, so signup,
+    `createsuperuser`, the seed and the tests send no notice. The
+    email-sending code from `change_email()` moved into a shared
+    `_send_notice()` helper, so both notices use the same path. The notice's
+    subject and body templates are in `templates/accounts/email/`.
+  - `StyledPasswordChangeForm` in `accounts/forms.py` is Django's stock
+    `PasswordChangeForm` with DaisyUI classes added in its constructor. The
+    old-password check and the password validators are all Django's.
+  - `ChangePasswordView` in `accounts/views.py` subclasses
+    `PasswordChangeView` and serves `accounts:password_change` at
+    `/accounts/security/password/`. It keeps Django's session handling:
+    the current session stays signed in and other sessions are signed out.
+    On success it sends the notice and returns to the hub with "Password
+    updated." It adds `LoginRequiredMixin` for consistency, although
+    Django's view already requires sign-in.
+  - `templates/accounts/change_password.html` is new. It shows the
+    password rules under the field, the same way the signup page does. The
+    hub's "Change password" button, a disabled placeholder until now, is a
+    link.
+  - 10 new tests are in `accounts/tests.py`. They cover sign-in being
+    required, the hub link, a successful change, this session staying
+    signed in while a second client is signed out, an outbox check for the
+    notice, rejections for a wrong old password, mismatched passwords and a
+    weak password, and no mail from signup or `create_user`. The seed test
+    in `products/tests.py` now also checks that seeding sends no mail.
+  - The full suite passed (318 tests), and `ruff check` and `ruff format`
+    were clean. Nothing was committed.
+- **Deviations:**
+  - No recommendations were overridden and no clarifying questions were
+    asked.
+  - The user asked one follow-up question: how to test the feature in the
+    browser. The agent gave steps using the seeded `customer` account,
+    checking the notice in the dev-server terminal, a private window to
+    show other sessions being signed out, the three rejection cases, the
+    sign-in redirect, and the other two roles. It warned that `seed` wipes
+    the database and that changed passwords persist until they're changed
+    back or the database is reseeded.
+  - At the end of Phase 4, the agent offered to commit and to write this
+    log. The user asked for the log only.
+- **Sideways:**
+  - Nothing failed. Every `uv run` printed the same warning as earlier
+    sessions: the active `VIRTUAL_ENV` (the parent folder's `.venv`)
+    doesn't match the project's `.venv`. uv ignored it and used the
+    project's own environment.
+  - The agent didn't test the feature in a browser. Only the test suite
+    checked it.
+
 ## 2026-10-11 — Account Security Center: Phase 3, change email with a notice to the old address
 
 ### Prompts

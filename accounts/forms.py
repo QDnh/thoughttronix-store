@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.forms import (
     AdminUserCreationForm,
     AuthenticationForm,
+    PasswordChangeForm,
     UserChangeForm,
     UserCreationForm,
 )
@@ -98,6 +99,19 @@ class ChangeEmailForm(forms.Form):
         if not self.user.check_password(password):
             raise forms.ValidationError("Your password was entered incorrectly.")
         return password
+
+
+class StyledPasswordChangeForm(PasswordChangeForm):
+    """The stock change-password form (old password, new one twice), in DaisyUI.
+
+    Validation is all Django's: the old password is checked and the new
+    one runs through ``AUTH_PASSWORD_VALIDATORS``, the same as signup.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
 
 
 class AddressForm(forms.ModelForm):

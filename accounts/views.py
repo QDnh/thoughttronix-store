@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -14,7 +14,13 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import AddressForm, ChangeEmailForm, SignInForm, SignupForm
+from .forms import (
+    AddressForm,
+    ChangeEmailForm,
+    SignInForm,
+    SignupForm,
+    StyledPasswordChangeForm,
+)
 from .models import Address
 
 
@@ -69,6 +75,24 @@ class ChangeEmailView(LoginRequiredMixin, SuccessMessageMixin, FormView):
     def form_valid(self, form):
         self.request.user.change_email(form.cleaned_data["email"])
         return super().form_valid(form)
+
+
+class ChangePasswordView(LoginRequiredMixin, SuccessMessageMixin, PasswordChangeView):
+    """Change password with the old one; the account's email gets a notice.
+
+    Django's session handling is kept as-is: this session stays signed in
+    and every other session for the account is signed out.
+    """
+
+    form_class = StyledPasswordChangeForm
+    template_name = "accounts/change_password.html"
+    success_url = reverse_lazy("accounts:security")
+    success_message = "Password updated."
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.request.user.notify_password_changed()
+        return response
 
 
 # --- The address book -------------------------------------------------------

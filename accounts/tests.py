@@ -3,8 +3,10 @@ from http import HTTPStatus
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import PasswordChangeForm
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError
+from django.test import Client
 from django.urls import reverse
 
 from accounts.forms import AdminAddUserForm
@@ -394,4 +396,152 @@ def test_change_email_rejects_unchanged_email(client, customer, mailoutbox):
 
     assert response.status_code == HTTPStatus.OK
     assert response.context["form"].errors["email"] == ["That is already your email."]
+    assert mailoutbox == []
+
+
+# --- Change password ----------------------------------------------------------
+
+
+def test_security_center_links_to_change_password(client, customer):
+    client.force_login(customer)
+
+    page = client.get(reverse("accounts:security")).content.decode()
+
+    assert reverse("accounts:password_change") in page
+
+
+def test_change_password_requires_login(client, db):
+    response = client.get(reverse("accounts:password_change"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+
+
+def test_change_password_page_returns_200(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("accounts:password_change"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert isinstance(response.context["form"], PasswordChangeForm)
+
+
+def test_change_password_saves_and_returns_to_hub(client, customer):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("accounts:password_change"),
+        {
+            "old_password": "customer123",
+            "new_password1": "fresh-Synapse-42",
+            "new_password2": "fresh-Synapse-42",
+        },
+        follow=True,
+    )
+
+    assert response.redirect_chain[-1][0] == reverse("accounts:security")
+    assert "Password updated." in response.content.decode()
+    customer.refresh_from_db()
+    assert customer.check_password("fresh-Synapse-42")
+
+
+def test_change_password_keeps_this_session_and_ends_others(client, customer):
+    other_device = Client()
+    other_device.force_login(customer)
+    client.force_login(customer)
+
+    client.post(
+        reverse("accounts:password_change"),
+        {
+            "old_password": "customer123",
+            "new_password1": "fresh-Synapse-42",
+            "new_password2": "fresh-Synapse-42",
+        },
+    )
+
+    security = reverse("accounts:security")
+    assert client.get(security).status_code == HTTPStatus.OK
+    assert other_device.get(security).status_code == HTTPStatus.FOUND
+
+
+def test_change_password_notifies_account_email(client, customer, mailoutbox):
+    client.force_login(customer)
+
+    client.post(
+        reverse("accounts:password_change"),
+        {
+            "old_password": "customer123",
+            "new_password1": "fresh-Synapse-42",
+            "new_password2": "fresh-Synapse-42",
+        },
+    )
+
+    assert len(mailoutbox) == 1
+    notice = mailoutbox[0]
+    assert notice.to == ["customer@example.com"]
+    assert notice.from_email == settings.DEFAULT_FROM_EMAIL
+    assert notice.subject == "Your ThoughtTronix password was changed"
+    assert "customer" in notice.body
+    assert "fresh-Synapse-42" not in notice.body
+
+
+@pytest.mark.parametrize(
+    ("data", "field"),
+    [
+        (
+            {
+                "old_password": "wrong",
+                "new_password1": "fresh-Synapse-42",
+                "new_password2": "fresh-Synapse-42",
+            },
+            "old_password",
+        ),
+        (
+            {
+                "old_password": "customer123",
+                "new_password1": "fresh-Synapse-42",
+                "new_password2": "fresh-Synapse-43",
+            },
+            "new_password2",
+        ),
+        (
+            {
+                "old_password": "customer123",
+                "new_password1": "password",
+                "new_password2": "password",
+            },
+            "new_password2",
+        ),
+    ],
+    ids=["wrong-old-password", "mismatch", "weak"],
+)
+def test_change_password_rejects_bad_input(client, customer, mailoutbox, data, field):
+    client.force_login(customer)
+
+    response = client.post(reverse("accounts:password_change"), data)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors[field]
+    assert "text-error" in response.content.decode()
+    customer.refresh_from_db()
+    assert customer.check_password("customer123")
+    assert mailoutbox == []
+
+
+def test_setting_a_password_elsewhere_sends_no_notice(client, db, mailoutbox):
+    """``set_password`` isn't overridden: signup and create_user stay silent."""
+    get_user_model().objects.create_user(
+        username="quiet", email="quiet@example.com", password="x"
+    )
+    client.post(
+        reverse("accounts:signup"),
+        {
+            "username": "newbie",
+            "email": "newbie@example.com",
+            "password1": "fresh-Synapse-42",
+            "password2": "fresh-Synapse-42",
+        },
+    )
+
+    assert get_user_model().objects.filter(username="newbie").exists()
     assert mailoutbox == []
