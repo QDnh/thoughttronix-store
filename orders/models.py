@@ -231,6 +231,14 @@ class DiscountCode(models.Model):
         self.save(update_fields=["starts_at", "expires_at"])
 
 
+class OrderQuerySet(models.QuerySet):
+    def has_delivered(self, user, product):
+        """Whether ``user`` has a Delivered order with ``product`` on a line."""
+        return self.filter(
+            user=user, status=Order.Status.DELIVERED, items__product=product
+        ).exists()
+
+
 class Order(models.Model):
     """A placed order — a snapshot, never a live view of the catalog.
 
@@ -290,6 +298,8 @@ class Order(models.Model):
 
     # default (not auto_now_add) so the seed can backdate orders.
     created_at = models.DateTimeField(default=timezone.now)
+
+    objects = OrderQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at"]

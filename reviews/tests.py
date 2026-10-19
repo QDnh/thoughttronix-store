@@ -1,13 +1,21 @@
+import re
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 
 import pytest
 from django.contrib.admin.sites import site
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.urls import reverse
 from django.utils import timezone
 
-from .models import COMMENT_MAX_LENGTH, Review
+from orders.models import Order
+
+from .models import COMMENT_MAX_LENGTH, Review, ReviewManager
+
+NOT_RECEIVED = "Only customers who've received this product can review it."
 
 # --- Model behavior ---------------------------------------------------------
 
@@ -112,6 +120,18 @@ def test_reviews_are_newest_first(review, product, other_customer):
     )
 
     assert list(product.reviews.all()) == [newer, review]
+
+
+def test_can_review_needs_a_delivered_purchase_and_no_review_yet(
+    order_with, customer, product
+):
+    assert not Review.objects.can_review(customer, product)
+
+    order_with(customer, product)
+    assert Review.objects.can_review(customer, product)
+
+    Review.objects.create(author=customer, product=product, rating=5, comment="Yes.")
+    assert not Review.objects.can_review(customer, product)
 
 
 def test_admin_registers_review():
@@ -220,3 +240,290 @@ def test_unavailable_products_show_their_reviews(client, customer, unavailable_p
 
     assert "Miss it." in page
     assert "1 review" in page
+
+
+# --- Writing a review (HTMX) --------------------------------------------------
+
+
+def test_a_double_submit_leaves_one_review_and_resends_the_section(
+    client, order_with, customer, product
+):
+    order_with(customer, product)
+    client.force_login(customer)
+    url = reverse("reviews:create", args=[product.pk])
+    data = {"rating": 5, "comment": "Worth every thought."}
+
+    client.post(url, data)
+    client.raise_request_exception = False  # see a server error as a browser would
+    second = client.post(url, data)
+
+    assert second.status_code == HTTPStatus.OK
+    assert Review.objects.filter(author=customer, product=product).count() == 1
+    assert "Worth every thought." in second.content.decode()
+
+
+def test_a_simultaneous_submit_is_not_a_server_error(
+    client, monkeypatch, order_with, review, customer, product
+):
+    # Both requests passed the eligibility check before either saved.
+    monkeypatch.setattr(ReviewManager, "can_review", lambda self, user, product: True)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", args=[product.pk]),
+        {"rating": 1, "comment": "The race loser."},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert list(Review.objects.all()) == [review]
+
+
+def test_create_posts_the_review_and_resends_the_section(
+    client, order_with, customer, product, other_customer
+):
+    order_with(customer, product)
+    Review.objects.create(
+        author=other_customer, product=product, rating=2, comment="Too chatty."
+    )
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", args=[product.pk]),
+        {"rating": 5, "comment": "Worth every thought."},
+    )
+
+    page = response.content.decode()
+    names = [template.name for template in response.templates]
+    assert response.status_code == HTTPStatus.OK
+    assert "base.html" not in names
+    assert 'id="reviews"' in page
+    review = Review.objects.get(author=customer, product=product)
+    assert (review.rating, review.comment) == (5, "Worth every thought.")
+    assert "3.5</span> out of 5" in page
+    assert "2 reviews" in page
+    assert page.index("Worth every thought.") < page.index("Too chatty.")
+    assert "Post review" not in page
+
+
+def test_create_requires_sign_in(client, product):
+    response = client.post(
+        reverse("reviews:create", args=[product.pk]),
+        {"rating": 5, "comment": "Anonymous praise."},
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert reverse("accounts:login") in response.url
+    assert not Review.objects.exists()
+
+
+def test_create_is_post_only(client, order_with, customer, product):
+    order_with(customer, product)
+    client.force_login(customer)
+
+    response = client.get(reverse("reviews:create", args=[product.pk]))
+
+    assert response.status_code == HTTPStatus.METHOD_NOT_ALLOWED
+
+
+def test_create_for_a_missing_product_is_404(client, customer):
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", args=[999]), {"rating": 5, "comment": "?"}
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_create_works_on_an_unavailable_product(
+    client, order_with, customer, unavailable_product
+):
+    order_with(customer, unavailable_product)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", args=[unavailable_product.pk]),
+        {"rating": 4, "comment": "Miss it already."},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert Review.objects.filter(product=unavailable_product).count() == 1
+
+
+def test_create_is_rejected_without_a_delivered_purchase(
+    client, order_with, customer, product
+):
+    order_with(customer, product, status=Order.Status.SHIPPED)
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:create", args=[product.pk]),
+        {"rating": 5, "comment": "Can't wait for it."},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert not Review.objects.exists()
+    assert NOT_RECEIVED in response.content.decode()
+
+
+def test_create_is_rejected_after_the_order_leaves_delivered(
+    client, order_with, customer, product
+):
+    order = order_with(customer, product)
+    client.force_login(customer)
+    client.get(product.get_absolute_url())  # The form was on screen.
+    order.status = Order.Status.CANCELLED
+    order.save()
+
+    response = client.post(
+        reverse("reviews:create", args=[product.pk]),
+        {"rating": 5, "comment": "Stale form."},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert not Review.objects.exists()
+    assert NOT_RECEIVED in response.content.decode()
+
+
+@pytest.mark.parametrize(
+    ("data", "field", "error"),
+    [
+        ({"comment": "Forgot the stars."}, "rating", "Choose a star rating."),
+        ({"rating": 3, "comment": "   "}, "comment", "Write a comment"),
+        (
+            {"rating": 3, "comment": "x" * (COMMENT_MAX_LENGTH + 1)},
+            "comment",
+            "at most 2000 characters",
+        ),
+    ],
+)
+def test_invalid_create_shows_errors_and_keeps_the_input(
+    client, order_with, customer, product, data, field, error
+):
+    order_with(customer, product)
+    client.force_login(customer)
+
+    response = client.post(reverse("reviews:create", args=[product.pk]), data)
+
+    page = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert not Review.objects.exists()
+    assert error in page
+    assert "Post review" in page
+    if data.get("rating"):
+        assert re.search(rf'value="{data["rating"]}"[^>]*checked', page)
+    if data["comment"].strip():
+        assert data["comment"] in page
+
+
+# --- Viewer states on the product page ----------------------------------------
+
+
+def radio_inputs(page):
+    return re.findall(r'<input type="radio"[^>]*>', page)
+
+
+def test_visitors_get_a_sign_in_link_back_to_the_product(client, product):
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    login = reverse("accounts:login")
+    assert f'href="{login}?next={product.get_absolute_url()}"' in page
+    assert "Post review" not in page
+    assert NOT_RECEIVED not in page
+
+
+def test_customers_who_never_ordered_see_the_not_received_message(
+    client, customer, product
+):
+    client.force_login(customer)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert NOT_RECEIVED in page
+    assert "Post review" not in page
+
+
+@pytest.mark.parametrize("status", [Order.Status.PLACED, Order.Status.SHIPPED])
+def test_customers_awaiting_delivery_see_the_not_received_message(
+    client, order_with, customer, product, status
+):
+    order_with(customer, product, status=status)
+    client.force_login(customer)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert NOT_RECEIVED in page
+    assert "Post review" not in page
+
+
+def test_eligible_customers_get_the_form_with_no_star_chosen(
+    client, order_with, customer, product
+):
+    order_with(customer, product)
+    client.force_login(customer)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert "Post review" in page
+    assert reverse("reviews:create", args=[product.pk]) in page
+    stars = radio_inputs(page)
+    assert len(stars) == 5
+    assert not any("checked" in star for star in stars)
+    assert NOT_RECEIVED not in page
+
+
+def test_reviewers_see_their_review_pinned_and_no_form(
+    client, order_with, review, customer, product, other_customer
+):
+    order_with(customer, product)
+    review.created_at = timezone.now() - timedelta(days=5)
+    review.save()
+    Review.objects.create(
+        author=other_customer, product=product, rating=1, comment="Newer, sadder."
+    )
+    client.force_login(customer)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert "Post review" not in page
+    assert NOT_RECEIVED not in page
+    assert page.index(review.comment) < page.index("Newer, sadder.")
+
+
+def test_other_viewers_see_newest_first_without_pinning(
+    client, review, product, other_customer
+):
+    review.created_at = timezone.now() - timedelta(days=5)
+    review.save()
+    Review.objects.create(
+        author=other_customer, product=product, rating=1, comment="Newer, sadder."
+    )
+    client.force_login(other_customer)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert page.index("Newer, sadder.") < page.index(review.comment)
+
+
+def test_staff_without_a_delivery_see_the_not_received_message(
+    client, staff_user, product
+):
+    client.force_login(staff_user)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert NOT_RECEIVED in page
+    assert "Post review" not in page
+
+
+def test_staff_with_a_delivery_get_the_form(client, order_with, staff_user, product):
+    order_with(staff_user, product)
+    client.force_login(staff_user)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    assert "Post review" in page
+
+
+def test_visitors_cannot_review(product):
+    assert not Review.objects.can_review(AnonymousUser(), product)

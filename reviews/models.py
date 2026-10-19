@@ -7,6 +7,7 @@ from django.core.validators import (
 from django.db import models
 from django.utils import timezone
 
+from orders.models import Order
 from products.models import Product
 
 COMMENT_MAX_LENGTH = 2000
@@ -19,6 +20,40 @@ class ReviewQuerySet(models.QuerySet):
         With no reviews the average is ``None`` and the count is 0.
         """
         return self.aggregate(average=models.Avg("rating"), count=models.Count("pk"))
+
+    def pinned_for(self, user):
+        """Newest first, with ``user``'s own review (if any) at the top."""
+        if not user.is_authenticated:
+            return self
+        return self.alias(
+            is_own=models.Case(
+                models.When(author=user, then=1),
+                default=0,
+                output_field=models.IntegerField(),
+            )
+        ).order_by("-is_own", "-created_at", "-pk")
+
+
+class ReviewManager(models.Manager.from_queryset(ReviewQuerySet)):
+    def can_review(self, user, product):
+        """Whether ``user`` may write a new review of ``product``.
+
+        They must be signed in, have received it (a Delivered order), and
+        not have reviewed it yet. Checked only at create time: a later
+        status change never touches an existing review.
+        """
+        if not user.is_authenticated:
+            return False
+        return (
+            Order.objects.has_delivered(user, product)
+            and not self.filter(author=user, product=product).exists()
+        )
+
+    def own_review(self, user, product):
+        """``user``'s review of ``product``, or ``None``."""
+        if not user.is_authenticated:
+            return None
+        return self.filter(author=user, product=product).first()
 
 
 class Review(models.Model):
@@ -46,7 +81,7 @@ class Review(models.Model):
     updated_at = models.DateTimeField(editable=False)
     edited_by_staff = models.BooleanField(default=False)
 
-    objects = ReviewQuerySet.as_manager()
+    objects = ReviewManager()
 
     class Meta:
         ordering = ["-created_at", "-pk"]

@@ -12,6 +12,7 @@ from django.views.generic import (
 )
 
 from accounts.mixins import StaffRequiredMixin
+from reviews.views import section_context as reviews_section_context
 from wishlist.models import Wishlist
 
 from .forms import CategoryForm, ProductForm, TagForm
@@ -80,8 +81,7 @@ class ProductDetailView(DetailView):
         context["in_wishlist"] = user.is_authenticated and Wishlist.for_user(
             user
         ).contains(self.object)
-        context["reviews"] = self.object.reviews.select_related("author")
-        context["review_summary"] = self.object.reviews.summary()
+        context.update(reviews_section_context(user, self.object))
         return context
 
 

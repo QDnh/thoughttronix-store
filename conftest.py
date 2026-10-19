@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from accounts.models import Address
-from orders.models import Cart, CartItem, DiscountCode
+from orders.models import Cart, CartItem, DiscountCode, Order, OrderItem
 from products.models import Category, Product, Tag
 from reviews.models import Review
 from wishlist.models import Wishlist
@@ -159,6 +159,44 @@ def review(customer, product):
         rating=4,
         comment="Hears everything, forgets nothing. Exactly as advertised.",
     )
+
+
+@pytest.fixture
+def order_with(db):
+    """Build a one-line order: ``order_with(user, product, status=...)``.
+
+    Defaults to Delivered, the status that lets its owner review the product.
+    """
+
+    def build(user, product, *, status=Order.Status.DELIVERED):
+        order = Order.objects.create(
+            user=user,
+            status=status,
+            subtotal=product.price,
+            total=product.price,
+            email=user.email,
+            shipping_name="Casey Monroe",
+            shipping_street="214 Synapse Street",
+            shipping_city="Canyon",
+            shipping_state="TX",
+            shipping_zip="79015",
+            billing_name="Casey Monroe",
+            billing_street="214 Synapse Street",
+            billing_city="Canyon",
+            billing_state="TX",
+            billing_zip="79015",
+            card_last4="4242",
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            unit_price=product.price,
+            quantity=1,
+        )
+        return order
+
+    return build
 
 
 @pytest.fixture

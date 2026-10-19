@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from products.models import Product
 
-from .models import Cart, CartItem
+from .models import Cart, CartItem, Order
 
 # --- Model behavior ---------------------------------------------------------
 
@@ -90,6 +90,25 @@ def test_decrement_stops_at_one(cart, product):
 
     item.refresh_from_db()
     assert item.quantity == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (Order.Status.DELIVERED, True),
+        (Order.Status.PLACED, False),
+        (Order.Status.SHIPPED, False),
+        (Order.Status.CANCELLED, False),
+    ],
+)
+def test_has_delivered_counts_only_the_users_delivered_orders(
+    order_with, customer, other_customer, product, status, expected
+):
+    # Someone else's delivery never counts as the customer's purchase.
+    order_with(other_customer, product)
+    order_with(customer, product, status=status)
+
+    assert Order.objects.has_delivered(customer, product) is expected
 
 
 # --- The cart page -----------------------------------------------------------

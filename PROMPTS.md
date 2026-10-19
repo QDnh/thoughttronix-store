@@ -28,6 +28,57 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-19 — Product Reviews: Phase 2 (write a review)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md Phase 2.
+2. (Asked whether to run /tdd) Yes, run /tdd
+3. Approved, go ahead
+4. Approved, go ahead
+5. yes
+6. yes
+7. yes
+8. yes
+9. yes
+10. Looks good. Continue.
+11. (Asked whether to append PROMPTS.md and whether to commit) Yes, append
+    it; Yes, commit
+12. Complete Product Reviews Phase 2
+
+### Summary
+- **Outcome:** Built Phase 2 of `plans/product-reviews.md`. `Order` gains
+  its first custom queryset, with `has_delivered(user, product)`. The
+  review manager gains `can_review` (signed in, a delivered purchase, and
+  no review yet) and `own_review`, and the queryset gains `pinned_for`
+  (the viewer's own review first, then newest first). A `ReviewForm`
+  (no default rating, whitespace-only comments rejected) posts to the new
+  `reviews:create` endpoint. The endpoint requires sign-in, is POST-only,
+  finds unavailable products, re-checks `can_review` on submit, and
+  catches a unique-constraint race so it never returns a 500. A shared
+  `section_context()` feeds both `ProductDetailView` and the create
+  response, so the section renders the same way on first load and after
+  HTMX swaps. Between the summary and the list it now shows the form, a
+  sign-in link with `next` back to the product, or the "only customers
+  who've received this product" message. Three behaviors were built
+  test-first with /tdd, each approved at RED and GREEN: the
+  delivered-purchase check, `can_review`, and the double submit. A new
+  `order_with` fixture in `conftest.py` builds one-line orders. Regular
+  tests cover the rest of the acceptance criteria. 443 tests pass, and
+  ruff is clean.
+- **Deviations:** None. Every recommendation was accepted as proposed,
+  and no follow-up questions were asked.
+- **Sideways:** At the GREEN step of the double-submit test, the agent
+  noted that the re-check alone leaves a gap. Two simultaneous requests
+  can both pass `can_review` before either saves. The fix wraps the save
+  in `transaction.atomic()` and catches `IntegrityError`, tested by
+  patching `can_review` to true while a review already exists. Six
+  viewer-state tests first failed because they expected an HTML-escaped
+  apostrophe in the not-received message. Literal template text isn't
+  escaped, so the test constant was corrected. A local import slipped
+  into `reviews/views.py` and was moved to the top before any test ran.
+  One test run passed the tool's 2-minute limit and finished in the
+  background.
+
 ## 2026-10-18 — Product Reviews: Phase 1 (read-only reviews section)
 
 ### Prompts
