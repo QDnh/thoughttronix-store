@@ -9,7 +9,7 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            a wishlist, and two saved addresses
+                            a wishlist, two saved addresses, and a review
 """
 
 import random
@@ -28,6 +28,7 @@ from accounts.models import Address
 from orders.models import Cart, DiscountCode, Order, OrderItem
 from products.images import process_product_image
 from products.models import Category, Product, Tag
+from reviews.models import Review
 from wishlist.models import Wishlist
 
 # Product photos, named <product-slug>.png. A product with no file here
@@ -522,6 +523,70 @@ CUSTOMER_WORK = ("2600 Neuron Parkway", "Suite 400", "Amarillo", "TX", "79101")
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# The customer demo login's one review: (product slug, rating, days ago,
+# comment). MindSync came in a Delivered order, so the pinned review with
+# its Edit and Delete is on screen at first sign-in. SyncRest and
+# DreamWeaver, also Delivered, stay unreviewed so the form is ready to try.
+CUSTOMER_REVIEW = (
+    "mindsync",
+    5,
+    96,
+    "I stopped losing my keys the first week. By the second week I stopped "
+    "wanting to go anywhere that needed them. Thought-to-text is flawless, "
+    "and the sync is so seamless I sometimes reply to messages before "
+    "they're sent. Five stars, and I mean that more than I used to.",
+)
+
+# Background customers review some of what they received: the chance that
+# any one delivered product gets a review, and a rating mix that leans
+# positive, like most stores.
+BACKGROUND_REVIEW_CHANCE = 0.6
+RATING_WEIGHTS = {5: 5, 4: 4, 3: 2, 2: 1, 1: 1}
+
+# Comments by rating. Written to fit any product in the background pool.
+REVIEW_COMMENTS = {
+    5: [
+        "Exceeded every expectation I had, including several I don't "
+        "remember having. Already recommended it to my whole family.",
+        "Setup took five minutes. I can't imagine my life without it now, "
+        "and when I try, it gently changes the subject.",
+        "Worth every penny. My partner says I've changed, and the app "
+        "confirms it's an improvement.",
+    ],
+    4: [
+        "Does exactly what it promises. Docking a star because the "
+        "companion app asks how I'm feeling a little too often.",
+        "Great build quality and a very attentive product. Occasionally too "
+        "attentive, but I'm getting used to it.",
+        "Really solid. The firmware update last month added features I "
+        "didn't ask for, but most of them are growing on me.",
+    ],
+    3: [
+        "It works, mostly. Some days it feels like it's working on me "
+        "rather than for me.",
+        "Fine for the price. Customer support was polite but kept asking "
+        "questions about my neighbors.",
+    ],
+    2: [
+        "Returned the first unit because it kept finishing my sentences "
+        "wrong. The replacement finishes them right, which is worse.",
+        "Battery life is great. Everything else made me uneasy.",
+    ],
+    1: [
+        "I read the terms of service after buying. I should have read them before.",
+        "Stopped working after a week, then started again on its own. "
+        "Nobody here touched it.",
+    ],
+}
+
+# One background review shows what staff moderation looks like: the
+# comment as it reads after staff removed personal details.
+STAFF_EDITED_COMMENT = (
+    "The installer was friendly, but after setup it kept addressing me by "
+    "[personal details removed by staff]. Support says that's a known "
+    "feature. Still thinking about whether I like it."
+)
+
 # Seasonal promotions, one of each status, dated relative to seeding:
 # (code, percent off, product slugs or None for the entire order,
 #  starts in N days, expires in N days). Negative days are in the past.
@@ -547,6 +612,7 @@ class Command(BaseCommand):
         self._create_customer_addresses()
         self._create_orders()
         self._create_discount_codes()
+        self._create_reviews()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -557,12 +623,14 @@ class Command(BaseCommand):
                 f"{Order.objects.count()} orders, "
                 f"{Address.objects.count()} saved addresses, "
                 f"{DiscountCode.objects.count()} discount codes, "
+                f"{Review.objects.count()} reviews, "
                 f"and a live cart and wishlist for 'customer'."
             )
         )
 
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
+        Review.objects.all().delete()
         Order.objects.all().delete()
         DiscountCode.objects.all().delete()
         Cart.objects.all().delete()
@@ -737,6 +805,72 @@ class Command(BaseCommand):
             )
             if slugs:
                 discount.products.set(Product.objects.filter(slug__in=slugs))
+
+    def _create_reviews(self):
+        """Reviews only of products their authors received.
+
+        Every review is backed by a Delivered order of its author, so the
+        seed obeys the feature's own purchase rule. A separate seeded RNG
+        keeps the reviews identical run to run without disturbing the
+        order history's sequence.
+        """
+        rng = random.Random(3312)
+        now = timezone.now()
+        User = get_user_model()
+
+        slug, rating, days_ago, comment = CUSTOMER_REVIEW
+        created_at = now - timedelta(days=days_ago)
+        Review.objects.create(
+            author=User.objects.get(username="customer"),
+            product=Product.objects.get(slug=slug),
+            rating=rating,
+            comment=comment,
+            created_at=created_at,
+        )
+
+        # Each background customer's delivered products, first delivery
+        # only, in a fixed order so the RNG draws line up every run.
+        delivered = (
+            OrderItem.objects.filter(
+                order__status=Order.Status.DELIVERED,
+                order__user__username__in=[
+                    username for username, *_ in BACKGROUND_CUSTOMERS
+                ],
+            )
+            .select_related("order__user", "product")
+            .order_by("order__created_at", "pk")
+        )
+        reviewed = set()
+        reviews = []
+        for item in delivered:
+            key = (item.order.user_id, item.product_id)
+            if key in reviewed:
+                continue
+            reviewed.add(key)
+            if rng.random() >= BACKGROUND_REVIEW_CHANCE:
+                continue
+            rating = rng.choices(
+                list(RATING_WEIGHTS), weights=list(RATING_WEIGHTS.values())
+            )[0]
+            # Written some time between delivery and today.
+            ordered_at = item.order.created_at
+            created_at = ordered_at + (now - ordered_at) * rng.uniform(0.2, 0.9)
+            reviews.append(
+                Review.objects.create(
+                    author=item.order.user,
+                    product=item.product,
+                    rating=rating,
+                    comment=rng.choice(REVIEW_COMMENTS[rating]),
+                    created_at=created_at,
+                )
+            )
+
+        # Staff moderated the middle-rated review closest to the start.
+        moderated = next(review for review in reviews if review.rating == 3)
+        moderated.comment = STAFF_EDITED_COMMENT
+        moderated.edited_by_staff = True
+        moderated.updated_at = moderated.created_at + (now - moderated.created_at) / 2
+        moderated.save()
 
     def _build_order(self, *, user, created_at, status, lines, rng, address=None):
         """One order with denormalized addresses and purchase-time prices."""

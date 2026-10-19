@@ -28,6 +28,35 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-19 — Product Reviews: Phase 5 (seeded demo reviews)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md Phase 5.
+2. (Asked whether to run /tdd) Do you think it is needed for this?
+3. (Given a recommendation to skip it) go ahead without TDD
+4. Looks good. Continue.
+5. (Asked whether to append PROMPTS.md and whether to commit) Yes; Yes
+6. (Asked for a commit title) Complete Product Reviews Phase 5
+
+### Summary
+- **Outcome:** Built Phase 5 of `plans/product-reviews.md`. The `seed`
+  command clears reviews in its reset step, gives `customer` a 5★
+  MindSync review, and leaves SyncRest and DreamWeaver unreviewed.
+  Seraphine Mini (Shipped) and Veil (Placed) show the not-received
+  message. Background customers review only products from their own
+  Delivered orders: each delivered product has a 60% chance of a review,
+  ratings are weighted toward positive, and the first 3★ review is the
+  single "Edited by staff" example. Reviews use their own fixed RNG, so
+  the existing order history is unchanged. 5 new seed tests, and the
+  idempotence test now compares the seeded reviews too. 485 tests pass,
+  and ruff is clean.
+- **Deviations:** The user asked whether TDD was needed. The agent
+  recommended skipping it, since the phase is seed data rather than new
+  behavior, and the user accepted.
+- **Sideways:** `ruff format` reformatted the two changed files after the
+  first check. An untouched `bash.exe.stackdump` showed as modified and
+  was left out of the commit.
+
 ## 2026-10-19 — Product Reviews: Phase 4 (staff moderation in place)
 
 ### Prompts

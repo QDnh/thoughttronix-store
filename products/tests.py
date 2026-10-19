@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
+from reviews.models import Review
 from wishlist.models import Wishlist, WishlistItem
 
 from .models import Category, Product, Tag
@@ -284,9 +285,61 @@ def test_seed_gives_customer_a_wishlist(db):
     assert Wishlist.objects.count() == 1
 
 
-def test_seed_is_idempotent(db):
+def test_seed_gives_customer_one_review_and_some_to_write(db):
     call_command("seed")
-    first = (
+
+    customer = get_user_model().objects.get(username="customer")
+    assert [review.product.slug for review in customer.reviews.all()] == ["mindsync"]
+    for slug in ("syncrest", "dreamweaver"):
+        assert Review.objects.can_review(customer, Product.objects.get(slug=slug))
+
+
+def test_seed_customer_sees_not_received_message(client, db):
+    call_command("seed")
+    customer = get_user_model().objects.get(username="customer")
+    client.force_login(customer)
+
+    # Seraphine Mini is in a Shipped order and Veil in a Placed one.
+    for slug in ("seraphine-mini", "veil"):
+        product = Product.objects.get(slug=slug)
+        assert not Review.objects.can_review(customer, product)
+        response = client.get(product.get_absolute_url())
+        assert (
+            "Only customers who've received this product can review it."
+            in response.content.decode()
+        )
+
+
+def test_seed_reviews_are_backed_by_delivered_orders(db):
+    call_command("seed")
+
+    reviews = Review.objects.select_related("author", "product")
+    assert reviews.count() > 1
+    for review in reviews:
+        assert Order.objects.has_delivered(review.author, review.product), review
+
+
+def test_seed_reviews_mix_ratings_across_products(db):
+    call_command("seed")
+
+    background = Review.objects.exclude(author__username="customer")
+    assert background.values("product").distinct().count() >= 5
+    assert len(set(background.values_list("rating", flat=True))) >= 3
+
+
+def test_seed_has_exactly_one_staff_edited_review(db):
+    call_command("seed")
+
+    moderated = Review.objects.get(edited_by_staff=True)
+    assert moderated.edit_label == "Edited by staff"
+    assert moderated.updated_at > moderated.created_at
+    # The customer's own review starts out untouched.
+    customer_review = Review.objects.get(author__username="customer")
+    assert customer_review.edit_label == ""
+
+
+def seeded_world():
+    return (
         Category.objects.count(),
         Tag.objects.count(),
         Product.objects.count(),
@@ -296,19 +349,19 @@ def test_seed_is_idempotent(db):
         WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
+        sorted(
+            Review.objects.values_list(
+                "author__username", "product__slug", "rating", "edited_by_staff"
+            )
+        ),
     )
 
+
+def test_seed_is_idempotent(db):
     call_command("seed")
-    second = (
-        Category.objects.count(),
-        Tag.objects.count(),
-        Product.objects.count(),
-        get_user_model().objects.count(),
-        CartItem.objects.count(),
-        Wishlist.objects.count(),
-        WishlistItem.objects.count(),
-        Order.objects.count(),
-        OrderItem.objects.count(),
-    )
+    first = seeded_world()
+
+    call_command("seed")
+    second = seeded_world()
 
     assert first == second
