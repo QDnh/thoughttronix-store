@@ -28,6 +28,48 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-19 — Product Reviews: Phase 4 (staff moderation in place)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md Phase 4.
+2. (Asked whether to run /tdd) Do you think it is needed here?
+3. (Given a recommendation to skip it) No, run tdd but only on what you
+   think we should run it for.
+4. (Shown two TDD behaviors) Yes, approved, go ahead
+5. (Shown the RED test for the staff edit rule) I believe so.
+6. (Asked whether to write the second test as a regression guard) Yes
+7. (Asked whether to continue with the rest of the phase) Yes, continue.
+8. Looks like everything works. Continue
+9. (Asked whether to append PROMPTS.md and whether to commit) Yes, append
+   it; Yes, commit
+10. (Asked for a commit title) Complete Product Reviews Phase 4
+
+### Summary
+- **Outcome:** Built Phase 4 of `plans/product-reviews.md`.
+  `editable_by` now returns every review for staff. `Review.edit(editor,
+  *, comment, rating=None)` branches on authorship: the author changes
+  the rating and comment and clears the staff flag, while anyone else
+  (only staff get past `editable_by`) changes only the comment, has any
+  rating ignored, and sets the flag, so the card reads "Edited by staff".
+  `ReviewForm` takes an `editor` and drops the rating field when staff
+  edit someone else's review. The fields partial hides the stars in that
+  case, and the card's edit mode reads "Moderate this review" with a note
+  that the rating stays. Staff see Edit and Delete on every card. 11 new
+  tests. 480 tests pass, and ruff is clean.
+- **Deviations:** Asked whether TDD was needed, the agent recommended
+  skipping it and writing the staff edit rule test first by hand. The
+  user overrode this and asked for /tdd scoped to what the agent judged
+  worthwhile. The agent picked two behaviors: the staff edit rule, which
+  went RED on the rating assertion and then GREEN, and a staff member
+  editing their own review. The agent flagged in advance that the second
+  would pass immediately, and the user accepted it as a regression guard.
+- **Sideways:** The second TDD cycle never went RED, because the first
+  cycle's author-first check already covered it. The agent said so
+  instead of forcing a failure. The first draft of the moderation heading
+  used the author's display name, which read awkwardly with the
+  "Verified customer" fallback. It was changed to "Moderate this review"
+  before the tests ran.
+
 ## 2026-10-19 — Product Reviews: Phase 3 (authors edit and delete their own review)
 
 ### Prompts

@@ -1,5 +1,6 @@
 {# One review, in display mode — or in edit mode when edit_form is given. #}
 {# Edit and Cancel swap only this card; Save and Delete swap the whole section. #}
+{# Edit and Delete show for the author and for staff, who moderate every review. #}
 {% if edit_form %}
   <form id="review-{{ review.pk }}"
         hx-post="{% url 'reviews:update' review.pk %}"
@@ -8,7 +9,15 @@
         hx-disabled-elt="find button[type='submit']"
         class="card bg-base-100 shadow-md">
     <div class="card-body gap-4">
-      <h3 class="card-title">Edit your review</h3>
+      {% if review.author_id == user.pk %}
+        <h3 class="card-title">Edit your review</h3>
+      {% else %}
+        <h3 class="card-title">Moderate this review</h3>
+        <p class="text-sm opacity-70">
+          You can edit the comment only. The {{ review.rating }}-star rating stays as the customer gave it,
+          and the review will be labeled "Edited by staff."
+        </p>
+      {% endif %}
 
       {% include "reviews/partials/_review_fields.html" with form=edit_form %}
 
@@ -37,7 +46,7 @@
         {% endif %}
       </div>
       <p>{{ review.comment|linebreaksbr }}</p>
-      {% if review.author_id == user.pk %}
+      {% if review.author_id == user.pk or user.is_staff %}
         <div class="card-actions justify-end">
           <button type="button" class="btn btn-ghost btn-sm"
                   hx-get="{% url 'reviews:edit' review.pk %}"

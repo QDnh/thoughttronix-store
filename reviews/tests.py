@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from orders.models import Order
 
+from .forms import ReviewForm
 from .models import COMMENT_MAX_LENGTH, Review, ReviewManager
 
 NOT_RECEIVED = "Only customers who've received this product can review it."
@@ -790,3 +791,163 @@ def test_another_customer_gets_a_404_and_the_review_is_unchanged(
     unchanged = Review.objects.get(pk=review.pk)
     assert (unchanged.rating, unchanged.comment) == (review.rating, review.comment)
     assert unchanged.edit_label == ""
+
+
+# --- Staff moderation in place -----------------------------------------------
+
+
+def test_a_staff_edit_changes_only_the_comment_and_sets_the_flag(review, staff_user):
+    before = review.updated_at
+
+    review.edit(staff_user, rating=1, comment="[Removed by staff]")
+    review.refresh_from_db()
+
+    assert (review.rating, review.comment) == (4, "[Removed by staff]")
+    assert review.edited_by_staff
+    assert review.updated_at > before
+    assert review.edit_label == "Edited by staff"
+
+
+def test_staff_editing_their_own_review_follow_the_author_rules(staff_user, product):
+    own = Review.objects.create(
+        author=staff_user,
+        product=product,
+        rating=4,
+        comment="Bought one too.",
+        edited_by_staff=True,
+    )
+
+    own.edit(staff_user, rating=2, comment="Returned it.")
+    own.refresh_from_db()
+
+    assert (own.rating, own.comment) == (2, "Returned it.")
+    assert not own.edited_by_staff
+    assert own.edit_label == "Edited"
+
+
+def test_editable_by_is_every_review_for_staff(
+    review, staff_user, other_customer, featured_product
+):
+    theirs = Review.objects.create(
+        author=other_customer, product=featured_product, rating=2, comment="Meh."
+    )
+
+    assert set(Review.objects.editable_by(staff_user)) == {review, theirs}
+
+
+def test_staff_moderating_get_a_form_without_a_rating(review, staff_user, customer):
+    assert "rating" not in ReviewForm(instance=review, editor=staff_user).fields
+    assert "rating" in ReviewForm(instance=review, editor=customer).fields
+
+
+def test_staff_see_edit_and_delete_on_every_card(
+    client, review, product, other_customer, staff_user
+):
+    theirs = Review.objects.create(
+        author=other_customer, product=product, rating=2, comment="Not mine."
+    )
+    client.force_login(staff_user)
+
+    page = client.get(product.get_absolute_url()).content.decode()
+
+    for each in (review, theirs):
+        assert reverse("reviews:edit", args=[each.pk]) in page
+        assert reverse("reviews:delete", args=[each.pk]) in page
+    assert NOT_RECEIVED in page
+
+
+def test_staff_edit_sends_back_the_card_without_stars(client, review, staff_user):
+    client.force_login(staff_user)
+
+    response = client.get(reverse("reviews:edit", args=[review.pk]))
+
+    page = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert "Moderate this review" in page
+    assert radio_inputs(page) == []
+    assert review.comment in page
+
+
+def test_staff_editing_their_own_review_get_the_stars(client, staff_user, product):
+    own = Review.objects.create(
+        author=staff_user, product=product, rating=3, comment="Bought one too."
+    )
+    client.force_login(staff_user)
+
+    page = client.get(reverse("reviews:edit", args=[own.pk])).content.decode()
+
+    assert "Edit your review" in page
+    assert len(radio_inputs(page)) == 5
+
+
+def test_staff_update_saves_the_comment_only_and_resends_the_section(
+    client, review, staff_user
+):
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:update", args=[review.pk]),
+        {"rating": 1, "comment": "[Personal details removed]"},
+    )
+
+    page = response.content.decode()
+    review.refresh_from_db()
+    assert response.status_code == HTTPStatus.OK
+    assert 'id="reviews"' in page
+    assert (review.rating, review.comment) == (4, "[Personal details removed]")
+    assert ">Edited by staff</span>" in page
+    assert "4.0</span> out of 5" in page
+
+
+def test_invalid_staff_update_shows_errors_and_leaves_the_review(
+    client, review, staff_user
+):
+    client.force_login(staff_user)
+
+    response = client.post(
+        reverse("reviews:update", args=[review.pk]), {"comment": "   "}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Write a comment" in response.content.decode()
+    review.refresh_from_db()
+    assert not review.edited_by_staff
+    assert review.edit_label == ""
+
+
+def test_an_author_edit_after_moderation_reads_edited(
+    client, review, customer, staff_user
+):
+    client.force_login(staff_user)
+    client.post(reverse("reviews:update", args=[review.pk]), {"comment": "[Removed]"})
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:update", args=[review.pk]),
+        {"rating": 4, "comment": "Rewritten politely."},
+    )
+
+    page = response.content.decode()
+    review.refresh_from_db()
+    assert not review.edited_by_staff
+    assert ">Edited</span>" in page
+    assert "Edited by staff" not in page
+
+
+def test_staff_delete_another_customers_review_and_resend_the_section(
+    client, review, product, other_customer, staff_user
+):
+    Review.objects.create(
+        author=other_customer, product=product, rating=2, comment="Too chatty."
+    )
+    client.force_login(staff_user)
+
+    response = client.post(reverse("reviews:delete", args=[review.pk]))
+
+    page = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert 'id="reviews"' in page
+    assert not Review.objects.filter(pk=review.pk).exists()
+    assert "2.0</span> out of 5" in page
+    assert "1 review" in page
+    assert 'hx-confirm="Delete this review?"' in page

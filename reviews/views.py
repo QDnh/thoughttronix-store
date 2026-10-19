@@ -67,13 +67,16 @@ class ReviewCreateView(LoginRequiredMixin, View):
         )
 
 
-def edit_form(review, data=None):
-    """The edit form for ``review``, its ids unique to this card.
+def edit_form(review, editor, data=None):
+    """``editor``'s edit form for ``review``, its ids unique to this card.
 
     Unique ids keep its labels pointing at its own fields when another
-    form (a new review, another card being edited) is on the page.
+    form (a new review, another card being edited) is on the page. Staff
+    editing someone else's review get the comment only.
     """
-    return ReviewForm(data, instance=review, auto_id=f"id_review_{review.pk}_%s")
+    return ReviewForm(
+        data, instance=review, editor=editor, auto_id=f"id_review_{review.pk}_%s"
+    )
 
 
 class EditableReviewMixin(LoginRequiredMixin):
@@ -94,7 +97,7 @@ class ReviewEditView(EditableReviewMixin, View):
         return render(
             request,
             CARD_TEMPLATE,
-            {"review": review, "edit_form": edit_form(review)},
+            {"review": review, "edit_form": edit_form(review, request.user)},
         )
 
 
@@ -114,7 +117,7 @@ class ReviewUpdateView(EditableReviewMixin, View):
 
     def post(self, request, pk):
         review = self.get_review()
-        form = edit_form(review, request.POST)
+        form = edit_form(review, request.user, request.POST)
         if not form.is_valid():
             response = render(
                 request, CARD_TEMPLATE, {"review": review, "edit_form": form}

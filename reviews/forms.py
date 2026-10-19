@@ -11,6 +11,9 @@ class ReviewForm(StyledModelForm):
     The rating has no initial value, so a customer must pick one; the
     template draws the radios as DaisyUI stars. The comment strips
     whitespace, so a comment of only spaces counts as blank.
+
+    Pass ``editor`` when editing: staff moderating someone else's review
+    get no rating field, so they can never submit a rating change.
     """
 
     rating = forms.TypedChoiceField(
@@ -28,3 +31,8 @@ class ReviewForm(StyledModelForm):
     class Meta:
         model = Review
         fields = ["rating", "comment"]
+
+    def __init__(self, *args, editor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if editor is not None and self.instance.author_id != editor.pk:
+            del self.fields["rating"]

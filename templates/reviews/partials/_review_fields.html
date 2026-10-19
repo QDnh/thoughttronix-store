@@ -1,5 +1,7 @@
 {# The rating stars and comment box, shared by the new-review form and a card's edit mode. #}
 {# Include with form=<ReviewForm>. A star is checked only when the form holds that rating. #}
+{# Staff moderating someone else's review get a form without a rating field, so no stars. #}
+{% if "rating" in form.fields %}
 <fieldset>
   <legend class="label mb-1">Your rating</legend>
   <div class="rating rating-lg">
@@ -14,6 +16,7 @@
     <p class="mt-1 text-sm text-error" role="alert">{{ error }}</p>
   {% endfor %}
 </fieldset>
+{% endif %}
 
 <div>
   <label class="label mb-1" for="{{ form.comment.id_for_label }}">Your review</label>
