@@ -1,0 +1,18 @@
+{# One review in display mode. #}
+<article class="card bg-base-100 shadow-md">
+  <div class="card-body gap-2">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span class="font-semibold">{{ review.author.display_name }}</span>
+      <div class="rating rating-xs" role="img" aria-label="{{ review.rating }} out of 5 stars">
+        {% for star in "12345" %}
+          <div class="mask mask-star-2 bg-warning"{% if forloop.counter == review.rating %} aria-current="true"{% endif %}></div>
+        {% endfor %}
+      </div>
+      <time class="text-sm opacity-70" datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"M j, Y" }}</time>
+      {% if review.edit_label %}
+        <span class="badge badge-ghost badge-sm">{{ review.edit_label }}</span>
+      {% endif %}
+    </div>
+    <p>{{ review.comment|linebreaksbr }}</p>
+  </div>
+</article>

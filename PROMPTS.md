@@ -28,6 +28,150 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Product Reviews: Phase 1 (read-only reviews section)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md Phase 1.
+2. (Asked whether to run /tdd) Yes, run /tdd
+3. yes, go ahead
+4. Yes
+5. I agree.
+6. Yes
+7. Yes
+8. Yes
+9. Yes
+10. Continue
+11. (Asked whether to append PROMPTS.md and whether to commit) Yes, append
+    it; Yes, commit
+12. Complete Product Reviews Phase 1
+
+### Summary
+- **Outcome:** Built Phase 1 of `plans/product-reviews.md`. A new `reviews`
+  app holds the `Review` model (author and product cascade, a 1–5 rating,
+  a comment capped at 2,000 characters, a backdatable `created_at`, an
+  `updated_at` that starts equal to it, an edited-by-staff flag, and a
+  unique author–product constraint), its migration, and its admin
+  registration. `User.display_name()` returns "Casey M." or "Verified
+  customer". `ProductDetailView` passes the reviews and the summary to a
+  new section partial and a card partial on every product page,
+  unavailable ones included. Three behaviors were built test-first with
+  /tdd, each approved at RED and GREEN: the one-query rating summary,
+  the display name, and the "Edited" / "Edited by staff" label. Regular
+  tests cover the rest of the acceptance criteria. 416 tests pass, and
+  ruff is clean.
+- **Deviations:** None. The user approved the three TDD behaviors and
+  every test as proposed. The agent offered to pin the one-name cases of
+  the display name (first name only shows "Casey", last name only falls
+  back to "Verified customer"), and the user didn't take it up, so those
+  branches are implemented but untested.
+- **Sideways:** The first full-suite run took more than the default
+  two-minute timeout and finished in the background, so later runs used
+  a longer timeout. A test first built its date with `timezone.datetime`
+  and `timezone.UTC`, which only work through a re-export in
+  `django.utils.timezone`. The agent switched to the `datetime` module
+  before the final run, and `ruff format` then reformatted the test file.
+  No test or assertion changed after its approval.
+
+## 2026-10-18 — Product Reviews: implementation plan
+
+### Prompts
+1. /prd-to-plan @prd\product-reviews.md
+2. Yes.
+3. Append a session log to PROMPTS.md at the repo root, under today's date,
+   newest entry at the top. Record every prompt I gave you this session, in
+   order, including any corrections. End the entry with a short summary:
+   the outcome, any places where I deviated from a recommended answer or
+   asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** Wrote `plans/product-reviews.md`. A new `reviews` app sits at
+  the site root, with the URLs `reviews/create/<product pk>/` and
+  `reviews/<review pk>/{edit,cancel,update,delete}/`. The plan has five
+  vertical slices: (1) a read-only reviews section on the product page,
+  (2) writing a review, covering the Delivered-purchase check,
+  `can_review`, and every viewer state, (3) authors editing and deleting
+  their own review, (4) staff moderation in place, and (5) seeded demo
+  reviews. The outline was kept as first proposed.
+- **Deviations:** None. The agent offered to split Phase 2 or to merge
+  Phases 3 and 4, and the user took neither option and approved the
+  breakdown as proposed.
+- **Sideways:** The agent asked two questions at once ("Does the
+  granularity feel right?" and "Should any phases be merged or split?"),
+  so the one-word reply "Yes" could be read either way. The agent took it
+  as approval of the unchanged outline and wrote the plan, then said so
+  and offered to show a revised outline before changing the file if that
+  was the wrong reading. No correction followed.
+
+## 2026-10-18 — Product Reviews: design interview and PRD
+
+### Prompts
+1. /grill-me We need to create a feature that allows customers to leave
+   product reviews. Requirements: customers must only be able to leave one
+   review per product; reviews consist of a rating and written comment;
+   customers must only be able to leave a review if they have actually
+   purchased the product; the only customer who may be allowed to edit and
+   delete the review is the customer who made it; staff must be able to
+   edit and delete any review; creating, editing, or deleting a review must
+   update smoothly without a reload.
+2. (Q1, what counts as purchased) Option B
+3. (Q2, what happens if eligibility is lost later) Option A
+4. (Q3, rating scale) Option A
+5. (Q4, comment rules) Option A
+6. (Q5, which app) Option A
+7. (Q6, where the purchase check lives) Option C
+8. (Q7, behavior when a user or product is deleted) Option A
+9. (Q8, where staff moderate) Option A
+10. (Q9, what staff can edit) Option C
+11. (Q10, edit labels over time) Option B
+12. (Q11, what people who can't review see) Option A
+13. (Q12, rating summary) Option B
+14. (Q13, HTMX swap strategy) Option A
+15. (Q14, delete confirmation) Option A
+16. (Q15, how edit/delete find a review and reject outsiders) Option A
+17. (Q16, list ordering and pagination) Option A
+18. (Q17, how the reviewer is named) Option B
+19. (Q18, seed data) Option A
+20. (Q19, confirm the out-of-scope list) Option A
+21. /to-prd
+
+### Summary
+- **Outcome:** A 19-question design interview, followed by
+  `prd/product-reviews.md` (42 user stories). No code was written, and
+  nothing was committed. Key decisions:
+  - "Purchased" means the product is in one of the user's Delivered orders.
+    It's checked only when a review is created. After that, the author can
+    always edit or delete their review.
+  - Reviews are a required 1–5 whole-star rating plus a required comment of
+    at most 2,000 characters. A database unique constraint enforces one
+    review per user per product.
+  - A new `reviews` app. `orders` owns the delivered-purchase query, and the
+    review manager owns `can_review` and `editable_by`. Both foreign keys
+    cascade.
+  - Staff moderate inline on the product page with the same controls. They
+    can edit only the comment, never the rating. Staff edits show "Edited by
+    staff," author edits show "Edited," and an author's later save clears the
+    staff flag.
+  - Create, update, and delete re-render the whole reviews section. Edit and
+    Cancel swap a single card. Delete uses `hx-confirm`. A review the user
+    may not touch returns a 404.
+  - A summary (average and count) on the product page only. The list is
+    newest first with the viewer's own review pinned, and has no
+    pagination. Reviewers show as "First L.", falling back to "Verified
+    customer."
+  - The seed gives `customer` a MindSync review and leaves SyncRest and
+    Dreamweaver unreviewed. Background reviews come only from Delivered
+    orders, and one is staff-edited.
+- **Deviations:** None. The user took the recommended option on all 19
+  questions and asked no follow-up questions. The agent settled several
+  details from the codebase without asking (the unique constraint, create
+  taking a product pk, staff following the purchase rule, error handling
+  and races, and test conventions) and listed them for the user to check.
+- **Sideways:** Nothing went wrong. Two things were added during PRD
+  writing rather than in the interview, and the agent pointed them out
+  afterward: separate edit and cancel GET endpoints are named for the
+  card swap, and a note says the Django admin doesn't enforce the
+  comment-only rule for staff.
+
 ## 2026-10-18 — Wishlist: Phase 4, seeded demo wishlist
 
 ### Prompts

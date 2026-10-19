@@ -156,7 +156,23 @@ def test_createsuperuser_stores_email(db):
     assert get_user_model().objects.get(username="boss").email == "boss@example.com"
 
 
-# --- Admin "Add user" ---------------------------------------------------------
+# --- Display name -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "expected"),
+    [
+        ("Casey", "Monroe", "Casey M."),
+        ("", "", "Verified customer"),
+    ],
+)
+def test_display_name_is_first_name_and_last_initial(first, last, expected):
+    user = get_user_model()(username="casey99", first_name=first, last_name=last)
+
+    assert user.display_name() == expected
+
+
+# --- Admin "Add user"---------------------------------------------------------
 
 
 ADMIN_ADD_USER = {

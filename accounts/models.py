@@ -43,6 +43,18 @@ class User(AbstractUser):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
 
+    def display_name(self) -> str:
+        """``Casey M.`` — the public name on reviews; never the username.
+
+        Without a first name there's nothing to show, so it falls back to
+        ``Verified customer``.
+        """
+        first = self.first_name.strip()
+        last = self.last_name.strip()
+        if not first:
+            return "Verified customer"
+        return f"{first} {last[0]}." if last else first
+
     def change_email(self, new_email: str) -> None:
         """Save a new email and send a notice to the *old* address.
 

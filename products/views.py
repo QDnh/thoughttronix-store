@@ -65,7 +65,10 @@ class CategoryView(CatalogView):
 
 
 class ProductDetailView(DetailView):
-    """A single product at its slug URL, with its wishlist button state."""
+    """A single product at its slug URL, with its wishlist button state and reviews.
+
+    Unavailable products have pages too, reviews included.
+    """
 
     template_name = "products/detail.html"
     context_object_name = "product"
@@ -77,6 +80,8 @@ class ProductDetailView(DetailView):
         context["in_wishlist"] = user.is_authenticated and Wishlist.for_user(
             user
         ).contains(self.object)
+        context["reviews"] = self.object.reviews.select_related("author")
+        context["review_summary"] = self.object.reviews.summary()
         return context
 
 

@@ -14,6 +14,7 @@ from django.utils import timezone
 from accounts.models import Address
 from orders.models import Cart, CartItem, DiscountCode
 from products.models import Category, Product, Tag
+from reviews.models import Review
 from wishlist.models import Wishlist
 
 
@@ -147,6 +148,17 @@ def cart_item(cart, product):
 @pytest.fixture
 def wishlist(customer):
     return Wishlist.for_user(customer)
+
+
+@pytest.fixture
+def review(customer, product):
+    """The customer's four-star review of the Seraphine Home Hub."""
+    return Review.objects.create(
+        author=customer,
+        product=product,
+        rating=4,
+        comment="Hears everything, forgets nothing. Exactly as advertised.",
+    )
 
 
 @pytest.fixture
