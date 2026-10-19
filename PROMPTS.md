@@ -28,6 +28,35 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist: Phase 4, seeded demo wishlist
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 4
+2. (Asked whether to run /tdd) Do you think tdd is needed for this? I'm
+   leaning no.
+3. Looks good.
+4. (Asked about PROMPTS.md and committing) Yes, append; yes, commit.
+5. (Asked for a commit title) Complete wishlist Phase 4
+
+### Summary
+- **Outcome:** Phase 4 is built and the full suite is green (385 passed);
+  `ruff check` and `ruff format --check` are clean.
+  - The seed's `_wipe()` now clears wishlists right after carts.
+  - A new `CUSTOMER_WISHLIST` constant and `_create_customer_wishlist()`
+    step give `customer` four saved products with staggered `added_at`
+    dates: MindSync Duo, EchoPatch (unavailable), Seraphine (also in the
+    seeded cart), and Pulse Halo, newest first.
+  - New `test_seed_gives_customer_a_wishlist` checks the contents and
+    order, the unavailable item, the cart overlap, and that only one
+    wishlist is seeded. `test_seed_is_idempotent` now also compares
+    wishlist and wishlist-item counts across two runs.
+- **Deviations:** Instead of answering yes or no to /tdd, the user asked
+  whether it was needed. The agent agreed it wasn't, since the phase is seed
+  data with no behavior to drive out, and implemented directly with tests
+  alongside.
+- **Sideways:** Nothing. The user checked the phase in the browser and
+  approved it on the first pass.
+
 ## 2026-10-18 — Wishlist: Phase 3, tidy and buy from the Wishlist page
 
 ### Prompts

@@ -9,7 +9,7 @@ Demo logins (documented in the README):
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
     customer / customer123  a plain customer, with order history, a live cart,
-                            and two saved addresses
+                            a wishlist, and two saved addresses
 """
 
 import random
@@ -28,6 +28,7 @@ from accounts.models import Address
 from orders.models import Cart, DiscountCode, Order, OrderItem
 from products.images import process_product_image
 from products.models import Category, Product, Tag
+from wishlist.models import Wishlist
 
 # Product photos, named <product-slug>.png. A product with no file here
 # shows its category placeholder.
@@ -479,6 +480,16 @@ CUSTOMER_CART = [
     ("whisper-alarm-clock", 1),
 ]
 
+# The customer demo login's wishlist: (product slug, saved N days ago).
+# EchoPatch is unavailable and Seraphine is also in the cart, so every
+# wishlist case is on screen at first sign-in.
+CUSTOMER_WISHLIST = [
+    ("mindsync-duo", 1),
+    ("echopatch", 6),
+    ("seraphine", 13),
+    ("pulse-halo", 28),
+]
+
 # The customer demo login's visible order history: (days ago, status,
 # [(product slug, quantity), ...]). Statuses follow age, like the
 # background orders, plus one recent order still in flight.
@@ -532,6 +543,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_wishlist()
         self._create_customer_addresses()
         self._create_orders()
         self._create_discount_codes()
@@ -545,7 +557,7 @@ class Command(BaseCommand):
                 f"{Order.objects.count()} orders, "
                 f"{Address.objects.count()} saved addresses, "
                 f"{DiscountCode.objects.count()} discount codes, "
-                f"and a live cart for 'customer'."
+                f"and a live cart and wishlist for 'customer'."
             )
         )
 
@@ -554,6 +566,7 @@ class Command(BaseCommand):
         Order.objects.all().delete()
         DiscountCode.objects.all().delete()
         Cart.objects.all().delete()
+        Wishlist.objects.all().delete()
         # Product's post_delete handler removes the old image files from
         # media/ once the whole seed commits.
         Product.objects.all().delete()
@@ -622,6 +635,17 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_wishlist(self):
+        """Saved dates are staggered so the newest-first order reads naturally."""
+        customer = get_user_model().objects.get(username="customer")
+        wishlist = Wishlist.for_user(customer)
+        now = timezone.now()
+        for slug, days_ago in CUSTOMER_WISHLIST:
+            wishlist.items.create(
+                product=Product.objects.get(slug=slug),
+                added_at=now - timedelta(days=days_ago),
+            )
 
     def _create_customer_addresses(self):
         """Addresses cascade with their users, so ``_wipe`` already clears them."""

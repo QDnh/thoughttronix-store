@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from orders.models import CartItem, Order, OrderItem
+from wishlist.models import Wishlist, WishlistItem
 
 from .models import Category, Product, Tag
 
@@ -261,6 +262,28 @@ def test_seed_builds_the_demo_world(db, mailoutbox):
     assert statuses == set(Order.Status.values)
 
 
+def test_seed_gives_customer_a_wishlist(db):
+    call_command("seed")
+
+    customer = get_user_model().objects.get(username="customer")
+    saved = [item.product for item in customer.wishlist.lines()]
+    assert [product.slug for product in saved] == [
+        "mindsync-duo",
+        "echopatch",
+        "seraphine",
+        "pulse-halo",
+    ]
+
+    # Every wishlist case is visible at first sign-in: an unavailable
+    # product, and one that's also in the cart.
+    assert any(not product.is_available for product in saved)
+    cart_products = {item.product for item in customer.cart.items.all()}
+    assert cart_products & set(saved)
+
+    # Only the customer demo login gets a seeded wishlist.
+    assert Wishlist.objects.count() == 1
+
+
 def test_seed_is_idempotent(db):
     call_command("seed")
     first = (
@@ -269,6 +292,8 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        Wishlist.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
     )
@@ -280,6 +305,8 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        Wishlist.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
     )
