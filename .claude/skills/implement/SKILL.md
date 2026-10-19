@@ -23,7 +23,6 @@ If no, skip the /tdd skill and move on to implementing the specified phase.
 ## 3. Run Feedback Loops
 
 Run the pytest suite to ensure all tests passed.
-Run the linter.
 Run ruff checks.
 
 ## 4. Manual Verification
@@ -40,5 +39,5 @@ in order, including any corrections; end the entry with a short summary: the out
 any places where the user deviated from a recommended answer or asked follow-up questions, 
 and anything that went sideways.
 
-Ask the user whether to commit the changes to git hub.
+Ask the user whether to commit the changes to GitHub.
 If yes, ask for a title for the commit.
