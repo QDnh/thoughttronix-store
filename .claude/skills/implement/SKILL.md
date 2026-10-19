@@ -32,9 +32,9 @@ Wait for the user to tell you to continue.
 
 ## 5. Finish the Phase
 
-Ask the whether to append PROMPTS.md.
+Ask whether to append PROMPTS.md.
 If yes, append a session log to PROMPTS.md at the repo root, under today's date, 
-newest entry at the top; record every prompt the user gave you this session, 
+newest entry at the top (line 31); record every prompt the user gave you this session, 
 in order, including any corrections; end the entry with a short summary: the outcome, 
 any places where the user deviated from a recommended answer or asked follow-up questions, 
 and anything that went sideways.
