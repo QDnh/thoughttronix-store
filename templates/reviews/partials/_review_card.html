@@ -1,18 +1,55 @@
-{# One review in display mode. #}
-<article class="card bg-base-100 shadow-md">
-  <div class="card-body gap-2">
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span class="font-semibold">{{ review.author.display_name }}</span>
-      <div class="rating rating-xs" role="img" aria-label="{{ review.rating }} out of 5 stars">
-        {% for star in "12345" %}
-          <div class="mask mask-star-2 bg-warning"{% if forloop.counter == review.rating %} aria-current="true"{% endif %}></div>
-        {% endfor %}
+{# One review, in display mode — or in edit mode when edit_form is given. #}
+{# Edit and Cancel swap only this card; Save and Delete swap the whole section. #}
+{% if edit_form %}
+  <form id="review-{{ review.pk }}"
+        hx-post="{% url 'reviews:update' review.pk %}"
+        hx-target="#reviews"
+        hx-swap="outerHTML"
+        hx-disabled-elt="find button[type='submit']"
+        class="card bg-base-100 shadow-md">
+    <div class="card-body gap-4">
+      <h3 class="card-title">Edit your review</h3>
+
+      {% include "reviews/partials/_review_fields.html" with form=edit_form %}
+
+      <div class="card-actions justify-end">
+        <button type="button" class="btn btn-ghost"
+                hx-get="{% url 'reviews:cancel' review.pk %}"
+                hx-target="#review-{{ review.pk }}"
+                hx-swap="outerHTML">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
       </div>
-      <time class="text-sm opacity-70" datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"M j, Y" }}</time>
-      {% if review.edit_label %}
-        <span class="badge badge-ghost badge-sm">{{ review.edit_label }}</span>
+    </div>
+  </form>
+{% else %}
+  <article id="review-{{ review.pk }}" class="card bg-base-100 shadow-md">
+    <div class="card-body gap-2">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="font-semibold">{{ review.author.display_name }}</span>
+        <div class="rating rating-xs" role="img" aria-label="{{ review.rating }} out of 5 stars">
+          {% for star in "12345" %}
+            <div class="mask mask-star-2 bg-warning"{% if forloop.counter == review.rating %} aria-current="true"{% endif %}></div>
+          {% endfor %}
+        </div>
+        <time class="text-sm opacity-70" datetime="{{ review.created_at|date:'c' }}">{{ review.created_at|date:"M j, Y" }}</time>
+        {% if review.edit_label %}
+          <span class="badge badge-ghost badge-sm">{{ review.edit_label }}</span>
+        {% endif %}
+      </div>
+      <p>{{ review.comment|linebreaksbr }}</p>
+      {% if review.author_id == user.pk %}
+        <div class="card-actions justify-end">
+          <button type="button" class="btn btn-ghost btn-sm"
+                  hx-get="{% url 'reviews:edit' review.pk %}"
+                  hx-target="#review-{{ review.pk }}"
+                  hx-swap="outerHTML">Edit</button>
+          <button type="button" class="btn btn-ghost btn-sm text-error"
+                  hx-post="{% url 'reviews:delete' review.pk %}"
+                  hx-target="#reviews"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete this review?">Delete</button>
+        </div>
       {% endif %}
     </div>
-    <p>{{ review.comment|linebreaksbr }}</p>
-  </div>
-</article>
+  </article>
+{% endif %}

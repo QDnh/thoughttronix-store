@@ -2,8 +2,11 @@
 
 Create names a *product*, like the wishlist's endpoints, and looks it up
 across the whole catalog: customers may review a product they received
-even after it becomes unavailable. Every response re-renders the whole
-reviews section from fresh data, so the page is never partly updated.
+even after it becomes unavailable. Every other endpoint names a *review*
+and finds it through ``editable_by``, so a review the user may not touch
+is a 404. Create, update and delete re-render the whole reviews section
+from fresh data, so the page is never partly updated; edit and cancel
+swap only the one card.
 """
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -17,6 +20,7 @@ from .forms import ReviewForm
 from .models import Review
 
 SECTION_TEMPLATE = "reviews/partials/_reviews_section.html"
+CARD_TEMPLATE = "reviews/partials/_review_card.html"
 
 
 def section_context(user, product, form=None):
@@ -60,4 +64,78 @@ class ReviewCreateView(LoginRequiredMixin, View):
             form = None
         return render(
             request, SECTION_TEMPLATE, section_context(request.user, product, form)
+        )
+
+
+def edit_form(review, data=None):
+    """The edit form for ``review``, its ids unique to this card.
+
+    Unique ids keep its labels pointing at its own fields when another
+    form (a new review, another card being edited) is on the page.
+    """
+    return ReviewForm(data, instance=review, auto_id=f"id_review_{review.pk}_%s")
+
+
+class EditableReviewMixin(LoginRequiredMixin):
+    """Finds the URL's review among those the user may edit, or 404s."""
+
+    def get_review(self):
+        reviews = Review.objects.editable_by(self.request.user)
+        return get_object_or_404(
+            reviews.select_related("author", "product"), pk=self.kwargs["pk"]
+        )
+
+
+class ReviewEditView(EditableReviewMixin, View):
+    """HTMX: swap one card into edit mode, pre-filled."""
+
+    def get(self, request, pk):
+        review = self.get_review()
+        return render(
+            request,
+            CARD_TEMPLATE,
+            {"review": review, "edit_form": edit_form(review)},
+        )
+
+
+class ReviewCancelView(EditableReviewMixin, View):
+    """HTMX: swap one card back to display mode, unchanged."""
+
+    def get(self, request, pk):
+        return render(request, CARD_TEMPLATE, {"review": self.get_review()})
+
+
+class ReviewUpdateView(EditableReviewMixin, View):
+    """HTMX: save an edit; the whole section swaps in.
+
+    An invalid edit sends back just the card, still in edit mode with its
+    errors, retargeted onto the card so the rest of the page stays put.
+    """
+
+    def post(self, request, pk):
+        review = self.get_review()
+        form = edit_form(review, request.POST)
+        if not form.is_valid():
+            response = render(
+                request, CARD_TEMPLATE, {"review": review, "edit_form": form}
+            )
+            response["HX-Retarget"] = f"#review-{review.pk}"
+            return response
+        review.edit(request.user, **form.cleaned_data)
+        return render(
+            request, SECTION_TEMPLATE, section_context(request.user, review.product)
+        )
+
+
+class ReviewDeleteView(EditableReviewMixin, View):
+    """HTMX: delete a review; the whole section swaps in.
+
+    An author who still has a delivered purchase gets the form back.
+    """
+
+    def post(self, request, pk):
+        review = self.get_review()
+        review.delete()
+        return render(
+            request, SECTION_TEMPLATE, section_context(request.user, review.product)
         )

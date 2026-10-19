@@ -28,6 +28,48 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-19 — Product Reviews: Phase 3 (authors edit and delete their own review)
+
+### Prompts
+1. /implement @prd/product-reviews.md @plans/product-reviews.md Phase 3.
+2. (Asked whether to run /tdd) Do you think tdd for this step is necessary?
+3. (Asked again, with a recommendation to skip) Skip TDD (Recommended)
+4. what is the pk for mindsync?
+5. Ah, I see it now. Thank you. Everything looks good. Continue.
+6. (Asked whether to append PROMPTS.md and whether to commit) Yes, append
+   it; Yes, commit
+7. Complete Product Reviews Phase 3
+
+### Summary
+- **Outcome:** Built Phase 3 of `plans/product-reviews.md`. The review
+  manager gains `editable_by(user)`, which returns only the user's own
+  reviews (the staff branch waits for Phase 4). `Review.edit(editor, *,
+  rating, comment)` saves the new values, clears the staff flag, and
+  refreshes the updated timestamp, which makes the card read "Edited".
+  Four new endpoints, all signed-in and looked up through `editable_by`
+  (so another customer gets a 404): `reviews:edit` and `reviews:cancel`
+  (GET) swap one card between edit and display mode, and `reviews:update`
+  and `reviews:delete` (POST) re-render the whole section. An invalid
+  update sends back just the card in edit mode, with errors and input
+  kept, using an `HX-Retarget` header. The stars and comment box moved
+  into a shared `_review_fields.html` partial used by both the create
+  form and the card's edit mode, and edit forms get per-review field ids.
+  The author's card shows Edit and Delete, with Delete behind
+  `hx-confirm="Delete this review?"`. 25 new tests cover every acceptance
+  criterion. 469 tests pass, and ruff is clean.
+- **Deviations:** Instead of answering yes or no to running /tdd, the
+  user asked whether TDD was necessary. The agent recommended skipping it,
+  since the phase's logic is small and the rest follows Phase 2's
+  patterns, and suggested Phase 4's staff edit rule as a better TDD
+  candidate. The user accepted. During manual verification the user asked
+  for MindSync's pk. The agent explained that the edit URL needs the
+  review's pk, not the product's, and looked up both (product 586,
+  review 8).
+- **Sideways:** The first shell lookup of the pk failed because a
+  one-line `-c` script with a list comprehension didn't run under
+  `manage.py shell`. A multi-line script worked. Nothing went wrong in
+  the implementation, and every test passed on the first run.
+
 ## 2026-10-19 — Product Reviews: Phase 2 (write a review)
 
 ### Prompts

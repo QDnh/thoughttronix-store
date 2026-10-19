@@ -1,0 +1,24 @@
+{# The rating stars and comment box, shared by the new-review form and a card's edit mode. #}
+{# Include with form=<ReviewForm>. A star is checked only when the form holds that rating. #}
+<fieldset>
+  <legend class="label mb-1">Your rating</legend>
+  <div class="rating rating-lg">
+    {% for star in "12345" %}
+      <input type="radio" name="{{ form.rating.html_name }}" value="{{ star }}"
+             class="mask mask-star-2 bg-warning"
+             aria-label="{{ star }} star{{ star|pluralize }}"
+             {% if form.rating.value|stringformat:"s" == star %}checked{% endif %}>
+    {% endfor %}
+  </div>
+  {% for error in form.rating.errors %}
+    <p class="mt-1 text-sm text-error" role="alert">{{ error }}</p>
+  {% endfor %}
+</fieldset>
+
+<div>
+  <label class="label mb-1" for="{{ form.comment.id_for_label }}">Your review</label>
+  {{ form.comment }}
+  {% for error in form.comment.errors %}
+    <p class="mt-1 text-sm text-error" role="alert">{{ error }}</p>
+  {% endfor %}
+</div>

@@ -55,6 +55,14 @@ class ReviewManager(models.Manager.from_queryset(ReviewQuerySet)):
             return None
         return self.filter(author=user, product=product).first()
 
+    def editable_by(self, user):
+        """The reviews ``user`` may edit or delete: their own.
+
+        Views look reviews up through this, so anyone else's review is a
+        404, exactly like one that doesn't exist.
+        """
+        return self.filter(author=user)
+
 
 class Review(models.Model):
     """A verified buyer's star rating and comment on one product.
@@ -98,6 +106,19 @@ class Review(models.Model):
         if self.updated_at is None:
             self.updated_at = self.created_at
         super().save(*args, **kwargs)
+
+    def edit(self, editor, *, rating, comment):
+        """Save ``editor``'s new rating and comment.
+
+        An author's edit clears the staff flag, so the label always
+        describes the text now shown. Refreshing the updated timestamp is
+        what marks the review "Edited".
+        """
+        self.rating = rating
+        self.comment = comment
+        self.edited_by_staff = False
+        self.updated_at = timezone.now()
+        self.save()
 
     @property
     def edit_label(self):
