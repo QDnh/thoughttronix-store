@@ -28,6 +28,53 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist: Phase 3, tidy and buy from the Wishlist page
+
+### Prompts
+1. /implement @prd/wishlist.md @plans/wishlist.md implement phase 3
+2. (Asked whether to run /tdd) Yes, run /tdd.
+3. yes, approve all three
+4. yes, approve the test
+5. yes, move on to behavior 2
+6. yes, keep it and move on to behavior 3
+7. yes, approve the test
+8. yes, move on to the rest of phase 3
+9. Continue
+10. (Asked about PROMPTS.md and committing) Yes, append; yes, commit.
+11. (Asked for a commit title) Add tdd skill, implement skill, and wishlist
+    phases 1-3
+
+### Summary
+- **Outcome:** Phase 3 is built and the full suite is green (384 passed);
+  `ruff check` and `ruff format --check` are clean.
+  - `RemoveFromListView` subclasses the existing `WishlistRemoveView` and
+    only overrides `respond`, rendering
+    `wishlist/partials/_wishlist_contents.html`. It is routed as
+    `wishlist:remove_from_list` at `wishlist/items/<int:pk>/remove/`.
+  - Each wishlist row now has an Unavailable badge when it applies, the
+    existing `orders/partials/_add_button.html` (quantities from the cart
+    context processor, disabled for unavailable products), and an HTMX
+    Remove button targeting `#wishlist-contents`.
+  - TDD covered three behaviors: the remove response shows the remaining
+    rows, removing the last item shows the empty state, and rows offer
+    add-to-cart while marking unavailable products. Ordinary tests added:
+    sign-in and POST-only on the new endpoint, the A/B privacy case for
+    both remove URLs, the Remove button on each row, an item staying on
+    the wishlist after add-to-cart, and a product that becomes unavailable
+    staying on the list.
+- **Deviations:** none — every recommendation was approved as offered.
+  The commit title was the user's own and covers more than Phase 3: it
+  also commits the new `implement` and `tdd` skills and the uncommitted
+  wishlist Phases 1–2 work.
+- **Sideways:**
+  - Behavior 1's first run failed with `NoReverseMatch`, not an
+    assertion; a route and a stub `respond` returning an empty response
+    were added to reach a real RED.
+  - Behavior 2 never went RED. Phase 2's contents partial already had the
+    empty state, so it passed as soon as behavior 1 rendered the real
+    partial. It was a poor TDD pick (its interface was already settled);
+    the user chose to keep it as a regression test.
+
 ## 2026-10-11 — Account Security Center: Phase 6, forgot password set a new password
 
 ### Prompts

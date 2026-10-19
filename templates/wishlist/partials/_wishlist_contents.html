@@ -1,0 +1,39 @@
+{% load humanize cart_extras %}
+{# The wishlist's rows, or its empty state — swapped whole into #wishlist-contents. #}
+{% if wishlist.lines %}
+  <ul class="divide-y divide-base-300 rounded-box bg-base-100 shadow-md">
+    {% for item in wishlist.lines %}
+      <li class="flex items-center gap-4 p-4">
+        <a href="{{ item.product.get_absolute_url }}" class="w-20 shrink-0 overflow-hidden rounded-box">
+          {% include "products/partials/_product_image.html" with product=item.product %}
+        </a>
+        <div class="min-w-0 flex-1">
+          <a href="{{ item.product.get_absolute_url }}" class="link-hover font-semibold">
+            {{ item.product.name }}
+          </a>
+          <p class="mt-1 text-primary">${{ item.product.price|intcomma }}</p>
+          {% if not item.product.is_available %}
+            <span class="badge badge-warning badge-outline mt-2">Unavailable</span>
+          {% endif %}
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          {% include "orders/partials/_add_button.html" with product=item.product in_cart=cart_quantities|quantity_of:item.product.pk %}
+          <button class="btn btn-ghost btn-sm text-error"
+                  hx-post="{% url 'wishlist:remove_from_list' item.product.pk %}"
+                  hx-target="#wishlist-contents">
+            Remove
+          </button>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="py-16 text-center">
+    <p class="text-5xl">💭</p>
+    <p class="mt-4 text-xl font-semibold">Your wishlist is empty</p>
+    <p class="mt-2 opacity-70">Save products from their product pages to keep them here for later.</p>
+    <a href="{% url 'products:catalog' %}" class="btn btn-primary btn-sm mt-6">
+      Browse the catalog
+    </a>
+  </div>
+{% endif %}

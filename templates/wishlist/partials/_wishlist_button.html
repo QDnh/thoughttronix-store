@@ -1,0 +1,25 @@
+{# The product-page wishlist control. Include with in_wishlist=<saved?>; #}
+{# the signed-in button POSTs add or remove and swaps itself in place. #}
+{% if user.is_authenticated %}
+  {% if in_wishlist %}
+    <button
+      hx-post="{% url 'wishlist:remove' product.pk %}"
+      hx-swap="outerHTML"
+      class="btn btn-secondary btn-sm">
+      In wishlist — remove
+    </button>
+  {% else %}
+    <button
+      hx-post="{% url 'wishlist:add' product.pk %}"
+      hx-swap="outerHTML"
+      class="btn btn-outline btn-secondary btn-sm">
+      Add to wishlist
+    </button>
+  {% endif %}
+{% else %}
+  {# Anonymous visitors are prompted to sign in — a plain link, no HTMX. #}
+  <a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}"
+     class="btn btn-outline btn-secondary btn-sm">
+    Add to wishlist
+  </a>
+{% endif %}
